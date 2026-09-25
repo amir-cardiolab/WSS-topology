@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WSSLCS Explorer</title>
+<meta name="description" content="Fixed points and stable/unstable manifolds (WSS LCS) of a wall shear stress vector field on a triangulated surface, computed in the browser from VTK files.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2714%27 fill=%27%230b5fc2%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%274%27 fill=%27%23f5c518%27/%3E%3Cpath d=%27M4 16h8M20 16h8M16 4v8M16 20v8%27 stroke=%27%23fff%27 stroke-width=%272.5%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #eef1f6; --panel: #ffffff; --panel-2: #e6ebf3; --text: #141c2e; --muted: #5b6885; --border: #d1d9e6;
+    --accent: #0b5fc2; --accent-ink: #ffffff; --canvas: #dfe5ee; --ok: #1a7a3e; --err: #b3261e; --row: #f3f6fa;
+    --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1322; --panel: #131a2c; --panel-2: #1a2237; --text: #e7ebf4; --muted: #99a5c0; --border: #29344d;
+      --accent: #63c4ff; --accent-ink: #061120; --canvas: #0a1020; --ok: #4ade80; --err: #f87171; --row: #172038;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1322; --panel: #131a2c; --panel-2: #1a2237; --text: #e7ebf4; --muted: #99a5c0; --border: #29344d;
+    --accent: #63c4ff; --accent-ink: #061120; --canvas: #0a1020; --ok: #4ade80; --err: #f87171; --row: #172038;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font-ui); }
+  * { box-sizing: border-box; }
+  #app { display: flex; height: 100%; min-height: 0; }
+  #panel { width: 400px; min-width: 300px; flex: none; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--border);
+    padding-block: 18px; padding-inline: 18px; display: flex; flex-direction: column; gap: 14px; }
+  #viewport { flex: 1; position: relative; min-width: 0; background: var(--canvas); }
+  #c { display: block; width: 100%; height: 100%; }
+  h1 { font: 600 26px/1.1 var(--font-display); margin: 0; letter-spacing: 0.2px; text-wrap: balance; }
+  h2 { font: 600 11.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin: 0 0 8px 0; }
+  .sub { color: var(--muted); margin: 6px 0 0 0; font-size: 13px; max-width: 46ch; }
+  section { background: var(--panel-2); border-radius: 10px; padding: 12px 12px 10px; }
+  label.row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 6px 0; }
+  label.row > span:first-child { color: var(--muted); }
+  input[type=number], input[type=text], select { width: 140px; background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 7px; font: inherit; font-family: var(--font-mono); font-size: 12.5px; }
+  input[type=file] { width: 100%; font-size: 12px; color: var(--muted); }
+  input[type=range] { width: 140px; accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+  button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 7px; padding: 8px 12px; font: 600 13px var(--font-ui); cursor: pointer; }
+  button.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .btns button { flex: 1 1 120px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  #status { font-size: 12.5px; color: var(--muted); min-height: 18px; margin-top: 8px; }
+  #status.err { color: var(--err); } #status.ok { color: var(--ok); }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 4px 5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td.num { font-family: var(--font-mono); font-size: 11.5px; }
+  th { color: var(--muted); font-weight: 500; }
+  tr.fp { cursor: pointer; } tr.fp:hover { background: var(--row); }
+  .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .line { display: inline-block; width: 18px; height: 3px; margin-right: 6px; vertical-align: 3px; border-radius: 2px; }
+  .legend-item { display: inline-block; margin: 2px 12px 2px 0; font-size: 12px; }
+  #colorbar { width: 100%; height: 10px; border-radius: 3px; margin-top: 8px; }
+  .cb-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+  pre { font: 11px/1.4 var(--font-mono); white-space: pre-wrap; color: var(--muted); margin: 8px 0 0 0; max-height: 220px; overflow: auto; }
+  #hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); pointer-events: none; }
+  #export textarea { width: 100%; height: 90px; font: 11px var(--font-mono); background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; }
+  .note { font-size: 12px; color: var(--muted); margin: 8px 0 0 0; }
+  @media (max-width: 820px) {
+    #app { flex-direction: column; }
+    #viewport { flex: none; height: 52vh; }
+    #panel { width: 100%; min-width: 0; flex: 1 1 auto; border-right: 0; border-top: 1px solid var(--border); padding-inline: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="viewport"><canvas id="c"></canvas><div id="hint">drag: rotate · right-drag: pan · wheel: zoom · click a fixed point row to centre it</div></main>
+  <aside id="panel">
+    <div>
+      <h1>WSSLCS Explorer</h1>
+      <p class="sub">Fixed points and stable/unstable manifolds (WSS LCS) of a wall shear stress vector field on a triangulated surface. Everything runs in your browser.</p>
+    </div>
+    <section>
+      <h2>Input</h2>
+      <form id="form">
+        <input type="file" id="file" accept=".vtk,.vtp,.vtu">
+        <label class="row"><span>vector array</span><select id="vector_array"><option value="">(auto)</option></select></label>
+        <label class="row"><span>WSS scale</span><input type="number" id="wss_scale" step="any" value="1"></label>
+        <label class="row"><span>compute manifolds</span><input type="checkbox" id="manifolds" checked></label>
+        <label class="row"><span>ignore boundary triangles</span><input type="checkbox" id="exclude_boundary" checked></label>
+        <details>
+          <summary>Manifold settings</summary>
+          <label class="row"><span>step / √area</span><input type="number" id="step_fraction" step="any" value="0.2"></label>
+          <label class="row"><span>max. steps</span><input type="number" id="max_steps" value="20000"></label>
+          <label class="row"><span>max. length (0 = auto)</span><input type="number" id="max_length" step="any" value="0"></label>
+          <label class="row"><span>perturbation / √area</span><input type="number" id="perturbation" step="any" value="0.1"></label>
+          <label class="row"><span>capture radius / √area</span><input type="number" id="capture_radius" step="any" value="0.5"></label>
+        </details>
+        <div class="btns">
+          <button type="submit" id="run">Run analysis</button>
+          <button type="button" class="secondary" id="demo">Load demo (P3 aneurysm TAWSS)</button>
+        </div>
+      </form>
+      <div id="status">Loading the demo data set …</div>
+    </section>
+    <section>
+      <h2>Display</h2>
+      <label class="row"><span>surface</span><input type="checkbox" id="show_surface" checked></label>
+      <label class="row"><span>surface opacity</span><input type="range" id="opacity" min="0.05" max="1" step="0.05" value="1"></label>
+      <label class="row"><span>wireframe</span><input type="checkbox" id="show_wire"></label>
+      <label class="row"><span>vector glyphs</span><input type="checkbox" id="show_glyphs"></label>
+      <label class="row"><span>fixed points</span><input type="checkbox" id="show_fp" checked></label>
+      <label class="row"><span>saddle eigenvectors</span><input type="checkbox" id="show_eig" checked></label>
+      <label class="row"><span>unstable manifolds (attracting LCS)</span><input type="checkbox" id="show_unstable" checked></label>
+      <label class="row"><span>stable manifolds (repelling LCS)</span><input type="checkbox" id="show_stable" checked></label>
+      <label class="row"><span>line width</span><input type="range" id="linewidth" min="1" max="8" step="0.5" value="3"></label>
+      <label class="row"><span>point size</span><input type="range" id="pointsize" min="0.3" max="4" step="0.1" value="1.2"></label>
+      <div class="btns"><button type="button" class="secondary" id="reset_view">Reset view</button></div>
+    </section>
+    <section id="legend">
+      <h2>Legend</h2>
+      <div id="legend-items"></div>
+      <div id="colorbar"></div>
+      <div class="cb-labels"><span id="cb-min">0</span><span>|WSS|</span><span id="cb-max">1</span></div>
+    </section>
+    <section id="about">
+      <h2>About</h2>
+      <p class="note" style="margin:0">Method of Arzani, Gambaruto, Chen &amp; Shadden, <i>Wall shear stress exposure time: a Lagrangian measure of near-wall stagnation and concentration in cardiovascular flows</i>. Fixed points are located from the Poincaré index of each triangle and the zero of the linear field inside it; manifolds are the trajectories leaving the saddles along their eigenvectors. Source code and the Python package: <a id="repo_link" href="https://github.com/amir-cardiolab/WSS-topology" target="_blank" rel="noopener">github.com/amir-cardiolab/WSS-topology</a>.</p>
+    </section>
+    <section id="results" hidden>
+      <h2>Results</h2>
+      <div id="summary"></div>
+      <div class="tablewrap"><table id="fptable"><thead><tr><th>id</th><th>type</th><th>ind.</th><th>x</th><th>y</th><th>z</th><th>λ₁</th><th>λ₂</th></tr></thead><tbody></tbody></table></div>
+      <div class="tablewrap" style="margin-top:8px"><table id="brtable"><thead><tr><th>saddle</th><th>manifold</th><th>±</th><th>length</th><th>ends</th></tr></thead><tbody></tbody></table></div>
+      <div id="export">
+        <div class="btns">
+          <button type="button" id="dl_fpvtk">Download fixed points (.vtk)</button>
+          <button type="button" id="dl_manvtk">Download manifolds (.vtk)</button>
+          <button type="button" id="dl_csv">Download fixed points (.csv)</button>
+          <button type="button" id="dl_json">Download JSON</button>
+        </div>
+        <div class="btns">
+          <button type="button" class="secondary" id="copy_csv">Copy fixed points (CSV)</button>
+          <button type="button" class="secondary" id="copy_fpvtk">Copy fixed points (VTK)</button>
+          <button type="button" class="secondary" id="copy_manvtk">Copy manifolds (VTK)</button>
+          <button type="button" class="secondary" id="copy_json">Copy JSON</button>
+        </div>
+        <textarea id="export_text" readonly placeholder="Copied exports also appear here (legacy ASCII VTK text, readable by ParaView)."></textarea>
+        <p class="note">The downloaded .vtk files open directly in ParaView. The desktop (Python) version of WSSLCS additionally computes WSS exposure time and surface tracers.</p>
+      </div>
+      <pre id="details"></pre>
+    </section>
+  </aside>
+</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { readVTK, selectVectors } from './vtk-reader.js';
+import { fixedPointsCSV, fixedPointsVTK, manifoldsVTK, TYPE_NAMES } from './wsslcs-core.js';
+
+const TYPE_COLORS = { 1: '#d946ef', 2: '#06b6d4', 3: '#f5c518', 4: '#4ade80', 6: '#38bdf8', 7: '#fb923c', 0: '#9ca3af' };
+const MANIFOLD_COLORS = { 0: '#2f6fe4', 1: '#e0433c' };     // unstable (forward) blue, stable (backward) red
+const VIRIDIS = ['#440154', '#482878', '#3e4a89', '#31688e', '#26828e', '#1f9e89', '#35b779', '#6ece58', '#b5de2b', '#fde725'];
+const $ = id => document.getElementById(id);
+
+// ---- renderer ----------------------------------------------------------------
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.001, 1000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 0.9));
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+camera.add(keyLight);
+keyLight.position.set(0.5, 0.8, 1);
+scene.add(camera);
+const root = new THREE.Group();
+scene.add(root);
+const state = { parsed: null, fileName: '', result: null, surface: null, wire: null, glyphs: null, fp: null, eig: null,
+                unstable: null, stable: null, lineMaterials: [], meanEdge: 1, radius: 1, center: new THREE.Vector3() };
+
+function applyTheme() {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim() || '#dfe5ee';
+  scene.background = new THREE.Color(bg);
+}
+applyTheme();
+try {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+} catch (e) {}
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (w === 0 || h === 0) return;
+  const pr = renderer.getPixelRatio();
+  if (canvas.width !== Math.floor(w * pr) || canvas.height !== Math.floor(h * pr)) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  for (const m of state.lineMaterials) m.resolution.set(w, h);
+}
+function animate() { resize(); controls.update(); renderer.render(scene, camera); requestAnimationFrame(animate); }
+animate();
+
+function colormap(t) {
+  t = Math.min(Math.max(t, 0), 1) * (VIRIDIS.length - 1);
+  const i = Math.floor(t), f = t - i;
+  return new THREE.Color(VIRIDIS[i]).lerp(new THREE.Color(VIRIDIS[Math.min(i + 1, VIRIDIS.length - 1)]), f);
+}
+function percentile(arr, p) { const s = Float64Array.from(arr).sort(); return s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))]; }
+
+function clearScene() {
+  while (root.children.length) {
+    const o = root.children.pop();
+    o.traverse?.(c => { c.geometry?.dispose?.(); if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose?.()); });
+  }
+  state.lineMaterials = [];
+  for (const k of ['surface', 'wire', 'glyphs', 'fp', 'eig', 'unstable', 'stable']) state[k] = null;
+}
+
+function buildScene(d) {
+  clearScene();
+  state.result = d;
+  state.meanEdge = d.mean_edge_length;
+  state.radius = d.radius;
+  state.center.set(d.center[0], d.center[1], d.center[2]);
+  const pos = Float32Array.from(d.points);
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geom.setIndex(new THREE.BufferAttribute(Uint32Array.from(d.triangles), 1));
+  geom.computeVertexNormals();
+  const mag = d.magnitude;
+  const lo = percentile(mag, 0.02), hi = Math.max(percentile(mag, 0.98), lo + 1e-12);
+  const colors = new Float32Array(mag.length * 3);
+  for (let i = 0; i < mag.length; i++) { const c = colormap((mag[i] - lo) / (hi - lo)); colors[3 * i] = c.r; colors[3 * i + 1] = c.g; colors[3 * i + 2] = c.b; }
+  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  state.surface = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: parseFloat($('opacity').value) }));
+  state.surface.visible = $('show_surface').checked;
+  root.add(state.surface);
+  state.wire = new THREE.LineSegments(new THREE.WireframeGeometry(geom), new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.35 }));
+  state.wire.visible = $('show_wire').checked;
+  root.add(state.wire);
+  $('cb-min').textContent = lo.toPrecision(3); $('cb-max').textContent = hi.toPrecision(3);
+  $('colorbar').style.background = `linear-gradient(90deg, ${VIRIDIS.join(',')})`;
+  // vector glyphs (sub-sampled)
+  const n = d.n_points, stride = Math.max(1, Math.round(n / 2500)), L = 1.5 * d.mean_edge_length;
+  const gp = [];
+  for (let i = 0; i < n; i += stride) {
+    const vx = d.vectors[3 * i], vy = d.vectors[3 * i + 1], vz = d.vectors[3 * i + 2];
+    const m = Math.hypot(vx, vy, vz) || 1;
+    const x = pos[3 * i], y = pos[3 * i + 1], z = pos[3 * i + 2];
+    const ex = x + L * vx / m, ey = y + L * vy / m, ez = z + L * vz / m;
+    const hx = vx / m * L * 0.3, hy = vy / m * L * 0.3, hz = vz / m * L * 0.3;
+    const px = -hy, py = hx, pz = 0.3 * hz;
+    gp.push(x, y, z, ex, ey, ez, ex, ey, ez, ex - hx + px * 0.5, ey - hy + py * 0.5, ez - hz + pz * 0.5, ex, ey, ez, ex - hx - px * 0.5, ey - hy - py * 0.5, ez - hz - pz * 0.5);
+  }
+  const gg = new THREE.BufferGeometry();
+  gg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(gp), 3));
+  const glyphColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#141c2e');
+  state.glyphs = new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: glyphColor, transparent: true, opacity: 0.75 }));
+  state.glyphs.visible = $('show_glyphs').checked;
+  root.add(state.glyphs);
+  // fixed points
+  const fps = d.fixed_points;
+  if (fps.length) {
+    const r = parseFloat($('pointsize').value) * d.mean_edge_length;
+    state.fp = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1 }), fps.length);
+    const mtx = new THREE.Matrix4();
+    fps.forEach((fp, i) => {
+      mtx.makeScale(r, r, r).setPosition(fp.position[0], fp.position[1], fp.position[2]);
+      state.fp.setMatrixAt(i, mtx);
+      state.fp.setColorAt(i, new THREE.Color(TYPE_COLORS[fp.type] || TYPE_COLORS[0]));
+    });
+    state.fp.instanceMatrix.needsUpdate = true;
+    if (state.fp.instanceColor) state.fp.instanceColor.needsUpdate = true;
+    state.fp.visible = $('show_fp').checked;
+    root.add(state.fp);
+    const ep = [], ec = [], Le = 3 * d.mean_edge_length;
+    for (const fp of fps) {
+      if (fp.type !== 3) continue;
+      for (const [vec, col] of [[fp.eigvec_out, MANIFOLD_COLORS[0]], [fp.eigvec_in, MANIFOLD_COLORS[1]]]) {
+        const c = new THREE.Color(col);
+        for (const s of [-1, 1]) {
+          ep.push(fp.position[0], fp.position[1], fp.position[2], fp.position[0] + s * Le * vec[0], fp.position[1] + s * Le * vec[1], fp.position[2] + s * Le * vec[2]);
+          ec.push(c.r, c.g, c.b, c.r, c.g, c.b);
+        }
+      }
+    }
+    const eg = new THREE.BufferGeometry();
+    eg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ep), 3));
+    eg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(ec), 3));
+    state.eig = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ vertexColors: true }));
+    state.eig.visible = $('show_eig').checked;
+    root.add(state.eig);
+  }
+  // manifolds
+  state.unstable = new THREE.Group(); state.stable = new THREE.Group();
+  const lw = parseFloat($('linewidth').value);
+  for (const br of d.branches) {
+    if (br.points.length < 6) continue;
+    const g = new LineGeometry();
+    g.setPositions(Array.from(br.points));
+    const m = new LineMaterial({ color: new THREE.Color(MANIFOLD_COLORS[br.kind]).getHex(), linewidth: lw, worldUnits: false });
+    m.resolution.set(canvas.clientWidth || 800, canvas.clientHeight || 600);
+    state.lineMaterials.push(m);
+    const line = new Line2(g, m);
+    line.computeLineDistances();
+    (br.kind === 0 ? state.unstable : state.stable).add(line);
+  }
+  state.unstable.visible = $('show_unstable').checked; state.stable.visible = $('show_stable').checked;
+  root.add(state.unstable, state.stable);
+  resetView();
+  buildLegend(d);
+  buildResults(d);
+}
+
+function resetView() {
+  const c = state.center, R = state.radius || 1;
+  camera.position.set(c.x + 0.4 * R, c.y - 2.2 * R, c.z + 1.4 * R);
+  camera.near = R / 1000; camera.far = R * 100; camera.updateProjectionMatrix();
+  controls.target.copy(c); controls.update();
+}
+$('reset_view').onclick = resetView;
+
+function buildLegend(d) {
+  const present = new Set(d.fixed_points.map(f => f.type));
+  const items = [];
+  for (const t of [3, 1, 2, 6, 7, 4, 0]) if (present.has(t) || t === 3 || t === 1 || t === 2)
+    items.push(`<span class="legend-item"><span class="swatch" style="background:${TYPE_COLORS[t]}"></span>${TYPE_NAMES[t]}</span>`);
+  items.push(`<span class="legend-item"><span class="line" style="background:${MANIFOLD_COLORS[0]}"></span>unstable manifold (forward)</span>`);
+  items.push(`<span class="legend-item"><span class="line" style="background:${MANIFOLD_COLORS[1]}"></span>stable manifold (backward)</span>`);
+  $('legend-items').innerHTML = items.join('');
+}
+buildLegend({ fixed_points: [] });
+
+const fmt = (x, n = 3) => Number.isFinite(x) ? x.toPrecision(n) : '–';
+const fmtEig = e => e[1] === 0 ? fmt(e[0]) : `${fmt(e[0])}${e[1] >= 0 ? '+' : '−'}${fmt(Math.abs(e[1]))}i`;
+
+function buildResults(d) {
+  $('results').hidden = false;
+  const nS = d.fixed_points.filter(f => f.type === 3).length;
+  const t = d.timings;
+  $('summary').innerHTML = `<b>${state.fileName}</b>: ${d.n_points} points, ${d.n_triangles} triangles, array <b>${d.vector_name}</b> (scale ${d.scale}).<br>` +
+    `${d.fixed_points.length} fixed points (${nS} saddles), sum of Poincaré indices ${d.poincare_index_sum}, ${d.branches.length} manifold branches. ` +
+    `Computed in ${((t.mesh_and_field + t.fixed_points + t.manifolds) / 1000).toFixed(2)} s.` +
+    (d.warnings.length ? `<br>Warnings: ${d.warnings.join('; ')}` : '');
+  const tb = $('fptable').querySelector('tbody');
+  tb.innerHTML = d.fixed_points.map(fp => `<tr class="fp" data-id="${fp.id}"><td>${fp.id}</td>` +
+    `<td><span class="swatch" style="background:${TYPE_COLORS[fp.type]}"></span>${fp.type_name}</td><td>${fp.index}</td>` +
+    `<td class="num">${fmt(fp.position[0], 4)}</td><td class="num">${fmt(fp.position[1], 4)}</td><td class="num">${fmt(fp.position[2], 4)}</td>` +
+    `<td class="num">${fmtEig(fp.eigenvalues[0])}</td><td class="num">${fmtEig(fp.eigenvalues[1])}</td></tr>`).join('');
+  tb.querySelectorAll('tr.fp').forEach(tr => tr.onclick = () => {
+    const fp = d.fixed_points[parseInt(tr.dataset.id, 10)];
+    const p = new THREE.Vector3(...fp.position);
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    controls.target.copy(p);
+    camera.position.copy(p).add(dir.multiplyScalar(12 * state.meanEdge));
+    controls.update();
+  });
+  $('brtable').querySelector('tbody').innerHTML = d.branches.map(br => `<tr><td>${br.saddle}</td>` +
+    `<td><span class="line" style="background:${MANIFOLD_COLORS[br.kind]}"></span>${br.kind_name}</td><td>${br.sign > 0 ? '+' : '−'}</td>` +
+    `<td class="num">${fmt(br.length, 4)}</td><td>${br.end_reason}</td></tr>`).join('');
+  $('details').textContent = `mesh: ${d.n_points} points, ${d.n_triangles} triangles, ${d.n_edges} edges, ${d.n_boundary_edges} boundary edges, mean edge length ${fmt(d.mean_edge_length, 4)}\n` +
+    `timings (ms): mesh+field ${t.mesh_and_field.toFixed(0)}, fixed points ${t.fixed_points.toFixed(0)}, manifolds ${t.manifolds.toFixed(0)}`;
+}
+
+// ---- display toggles -----------------------------------------------------------
+$('show_surface').onchange = e => { if (state.surface) state.surface.visible = e.target.checked; };
+$('opacity').oninput = e => { if (state.surface) state.surface.material.opacity = parseFloat(e.target.value); };
+$('show_wire').onchange = e => { if (state.wire) state.wire.visible = e.target.checked; };
+$('show_glyphs').onchange = e => { if (state.glyphs) state.glyphs.visible = e.target.checked; };
+$('show_fp').onchange = e => { if (state.fp) state.fp.visible = e.target.checked; };
+$('show_eig').onchange = e => { if (state.eig) state.eig.visible = e.target.checked; };
+$('show_unstable').onchange = e => { if (state.unstable) state.unstable.visible = e.target.checked; };
+$('show_stable').onchange = e => { if (state.stable) state.stable.visible = e.target.checked; };
+$('linewidth').oninput = e => { for (const m of state.lineMaterials) m.linewidth = parseFloat(e.target.value); };
+$('pointsize').oninput = e => {
+  if (!state.fp || !state.result) return;
+  const r = parseFloat(e.target.value) * state.meanEdge, mtx = new THREE.Matrix4();
+  state.result.fixed_points.forEach((fp, i) => { mtx.makeScale(r, r, r).setPosition(fp.position[0], fp.position[1], fp.position[2]); state.fp.setMatrixAt(i, mtx); });
+  state.fp.instanceMatrix.needsUpdate = true;
+};
+
+// ---- computation (worker with main-thread fallback) ---------------------------------
+let worker = null, jobId = 0, corePromise = null;
+try { worker = new Worker('worker.js', { type: 'module' }); } catch (e) { worker = null; }
+function computeInWorker(points, triangles, vectors, options) {
+  return new Promise((resolve, reject) => {
+    const id = ++jobId;
+    const onMsg = e => {
+      if (e.data.id !== id) return;
+      worker.removeEventListener('message', onMsg); worker.removeEventListener('error', onErr);
+      if (e.data.error) reject(new Error(e.data.error)); else resolve(e.data.result);
+    };
+    const onErr = e => { worker.removeEventListener('message', onMsg); worker.removeEventListener('error', onErr); reject(new Error(e.message || 'worker error')); };
+    worker.addEventListener('message', onMsg);
+    worker.addEventListener('error', onErr);
+    worker.postMessage({ id, points, triangles, vectors, options }, [points.buffer, triangles.buffer, vectors.buffer]);
+  });
+}
+async function compute(points, triangles, vectors, options) {
+  if (worker) {
+    try { return await computeInWorker(points, triangles, vectors, options); }
+    catch (err) { if (!/worker error|importing a module|Failed to load/i.test(err.message)) throw err; worker = null; }
+  }
+  corePromise = corePromise || import('./wsslcs-core.js');
+  const core = await corePromise;
+  return core.analyze(points, triangles, vectors, options);
+}
+
+function setStatus(msg, cls = '') { $('status').textContent = msg; $('status').className = cls; }
+function options() {
+  return { scale: parseFloat($('wss_scale').value) || 1, manifolds: $('manifolds').checked, excludeBoundary: $('exclude_boundary').checked,
+    stepFraction: parseFloat($('step_fraction').value) || 0.2, maxSteps: parseInt($('max_steps').value, 10) || 20000,
+    maxLength: parseFloat($('max_length').value) || 0, perturbation: parseFloat($('perturbation').value) || 0.1,
+    captureRadius: parseFloat($('capture_radius').value) || 0.5 };
+}
+const yieldToUI = () => new Promise(r => setTimeout(r, 0));
+
+async function run() {
+  if (!state.parsed) { setStatus('Load a file or the demo data first.', 'err'); return; }
+  $('run').disabled = $('demo').disabled = true;
+  try {
+    setStatus(`Computing fixed points and manifolds for ${state.fileName} …`);
+    await yieldToUI();
+    const sel = selectVectors(state.parsed, $('vector_array').value || null);
+    const opts = options();
+    const t0 = performance.now();
+    const res = await compute(Float64Array.from(state.parsed.points), Int32Array.from(state.parsed.triangles), Float64Array.from(sel.data), opts);
+    res.vector_name = sel.name;
+    res.wall_time_s = (performance.now() - t0) / 1000;
+    buildScene(res);
+    setStatus(`Done: ${res.fixed_points.length} fixed points, ${res.branches.length} manifold branches (${res.wall_time_s.toFixed(2)} s).`, 'ok');
+  } catch (err) {
+    setStatus('Error: ' + err.message, 'err');
+  } finally {
+    $('run').disabled = $('demo').disabled = false;
+  }
+}
+
+async function loadBuffer(buffer, name) {
+  setStatus(`Reading ${name} …`);
+  await yieldToUI();
+  const parsed = await readVTK(buffer);
+  state.parsed = parsed;
+  state.fileName = name;
+  const cands = parsed.pointArrays.filter(a => a.ncomp === 3 && a.data.length === parsed.points.length).map(a => a.name);
+  const sel = $('vector_array');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">(auto)</option>' + cands.map(c => `<option value="${c}">${c}</option>`).join('');
+  sel.value = cands.includes(prev) ? prev : (cands.includes('wss') ? 'wss' : '');
+  const w = parsed.warnings.length ? ` (${parsed.warnings.join('; ')})` : '';
+  setStatus(`${name}: ${parsed.points.length / 3} points, ${parsed.triangles.length / 3} triangles, vector arrays: ${cands.join(', ') || 'none'}${w}`);
+  await run();
+}
+
+$('file').onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try { await loadBuffer(await f.arrayBuffer(), f.name); }
+  catch (err) { setStatus('Error: ' + err.message, 'err'); }
+};
+$('form').onsubmit = e => { e.preventDefault(); run(); };
+$('demo').onclick = async () => {
+  $('demo').disabled = true;
+  try {
+    const resp = await fetch('demo/P3_TAWSS-1.vtk');
+    if (!resp.ok) throw new Error('demo data not available (' + resp.status + ')');
+    $('wss_scale').value = '0.0354';
+    await loadBuffer(await resp.arrayBuffer(), 'P3_TAWSS-1.vtk');
+  } catch (err) { setStatus('Error: ' + err.message, 'err'); }
+  finally { $('demo').disabled = false; }
+};
+
+// ---- exports (copy to clipboard) ---------------------------------------------------
+async function copyText(text, label) {
+  const ta = $('export_text');
+  ta.value = text;
+  try { await navigator.clipboard.writeText(text); setStatus(`${label} copied to the clipboard (${(text.length / 1024).toFixed(0)} kB).`, 'ok'); }
+  catch (e) { ta.focus(); ta.select(); setStatus(`${label} shown below – select the text and copy it.`, ''); }
+}
+function saveFile(text, name, type = 'text/plain') {
+  const blob = new Blob([text], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  setStatus(`${name} downloaded (${(text.length / 1024).toFixed(0)} kB).`, 'ok');
+}
+const baseName = () => (state.fileName || 'wsslcs').replace(/\.(vtk|vtp|vtu)$/i, '');
+$('dl_fpvtk').onclick = () => state.result && saveFile(fixedPointsVTK(state.result), baseName() + '_FixedPoints.vtk');
+$('dl_manvtk').onclick = () => state.result && saveFile(manifoldsVTK(state.result), baseName() + '_Manifolds.vtk');
+$('dl_csv').onclick = () => state.result && saveFile(fixedPointsCSV(state.result), baseName() + '_FixedPoints.csv', 'text/csv');
+$('dl_json').onclick = () => state.result && saveFile(resultJSON(), baseName() + '_wsslcs.json', 'application/json');
+$('copy_csv').onclick = () => state.result && copyText(fixedPointsCSV(state.result), 'Fixed points CSV');
+$('copy_fpvtk').onclick = () => state.result && copyText(fixedPointsVTK(state.result), 'Fixed points VTK');
+$('copy_manvtk').onclick = () => state.result && copyText(manifoldsVTK(state.result), 'Manifolds VTK');
+function resultJSON() {
+  return JSON.stringify({
+    file: state.fileName, vector_name: state.result.vector_name, scale: state.result.scale, poincare_index_sum: state.result.poincare_index_sum,
+    fixed_points: state.result.fixed_points, branches: state.result.branches.map(b => ({ saddle: b.saddle, kind: b.kind_name, sign: b.sign, length: b.length, end_reason: b.end_reason, points: Array.from(b.points) })),
+  }, (k, v) => (typeof v === 'number' && !Number.isInteger(v)) ? Number(v.toPrecision(8)) : v);
+}
+$('copy_json').onclick = () => state.result && copyText(resultJSON(), 'JSON');
+
+// ---- start with the demo so the page opens in a working state ----------------------------
+$('demo').click();
+</script>
+</body>
+</html>
