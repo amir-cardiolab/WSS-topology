@@ -105,7 +105,7 @@
         </details>
         <div class="btns">
           <button type="submit" id="run">Run analysis</button>
-          <button type="button" class="secondary" id="demo">Load demo (P3 aneurysm TAWSS)</button>
+          <button type="button" class="secondary" id="demo">Load demo (carotid artery TAWSS)</button>
         </div>
       </form>
       <div id="status">Loading the demo data set …</div>
@@ -484,10 +484,10 @@ $('form').onsubmit = e => { e.preventDefault(); run(); };
 $('demo').onclick = async () => {
   $('demo').disabled = true;
   try {
-    const resp = await fetch('demo/P3_TAWSS-1.vtk');
+    const resp = await fetch('demo/Carotid_artery_TAWSS.vtk');
     if (!resp.ok) throw new Error('demo data not available (' + resp.status + ')');
     $('wss_scale').value = '0.0354';
-    await loadBuffer(await resp.arrayBuffer(), 'P3_TAWSS-1.vtk');
+    await loadBuffer(await resp.arrayBuffer(), 'Carotid_artery_TAWSS.vtk');
   } catch (err) { setStatus('Error: ' + err.message, 'err'); }
   finally { $('demo').disabled = false; }
 };

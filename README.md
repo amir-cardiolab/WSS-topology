@@ -82,7 +82,7 @@ exposure time.
 | `wsslcs-core.js` | mesh, field transport, fixed points, manifolds, tracer |
 | `vtk-reader.js` | VTK legacy / XML reader |
 | `worker.js` | runs the analysis in a Web Worker |
-| `demo/P3_TAWSS-1.vtk` | demo data: time-averaged WSS on an abdominal aortic aneurysm surface |
+| `demo/Carotid_artery_TAWSS.vtk` | demo data: time-averaged WSS on a carotid artery surface (22 899 points, 45 794 triangles, 7 fixed points) |
 
 The site is static: any web server (or GitHub Pages) can host these files.
 three.js is loaded from the jsDelivr CDN and the fonts from Google Fonts.
