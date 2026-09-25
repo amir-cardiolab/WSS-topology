@@ -33,22 +33,46 @@ The surface must be triangulated (quads/polygons are fan-triangulated) and
 carry a 3-component point array with the WSS vectors (cell vectors are
 averaged to the points).  Any array can be selected from the drop-down.
 
-## Method
+## Method and references
 
-The method is the one used in
+The tool implements the WSS topology analysis developed in the following
+papers.  Please cite them if you use it:
 
-> A. Arzani, A. M. Gambaruto, G. Chen, S. C. Shadden, *Wall shear stress
-> exposure time: a Lagrangian measure of near-wall stagnation and
-> concentration in cardiovascular flows*, Biomechanics and Modeling in
-> Mechanobiology (2017).
+1. Arzani, A., Gambaruto, A. M., Chen, G. and Shadden, S. C., *Wall shear
+   stress exposure time: A Lagrangian measure of near-wall stagnation and
+   concentration in cardiovascular flows*, Biomechanics and Modeling in
+   Mechanobiology, 16(3), 787–803, 2017.
+2. Arzani, A., Shadden, S. C., *Wall shear stress fixed points in
+   cardiovascular fluid mechanics*, Journal of Biomechanics, 73, 145–152,
+   2018.
+3. Arzani, A., Gambaruto, A. M., Chen, G. and Shadden, S. C., *Lagrangian
+   wall shear stress structures and near wall transport in high Schmidt
+   aneurysmal flows*, Journal of Fluid Mechanics, 790, 158–172, 2016.
 
-Vertex vectors are projected onto the tangent planes, transported into the
-triangles with the discrete polar map of the vertex fans, and interpolated
-linearly inside each triangle.  Manifolds are traced with RK4 in arc length
-across the triangles (exact edge crossings, vertex handling).
+The stable and unstable manifolds of the WSS fixed points are the WSS
+Lagrangian coherent structures (WSS LCS) introduced in [3], which organize
+near-wall transport: near-wall trajectories accumulate along the unstable
+manifolds (attracting WSS LCS) and separate along the stable manifolds
+(repelling WSS LCS).  Reference [2] discusses the WSS fixed points themselves
+(sources, sinks, saddles, foci) and their significance in cardiovascular
+flows.  Reference [1] describes the computation used here (Section 2.4):
+the fixed points of the (time-averaged) WSS vector field are located in the
+triangles whose Poincaré index is non-trivial, the field is linearised
+around them to obtain the Jacobian, its eigenvalues and eigenvectors, and
+the saddle-type fixed points are perturbed along the eigenvector of the
+positive (negative) eigenvalue and integrated forward (backward) in time to
+trace the unstable (stable) manifold, until the trajectory reaches another
+fixed point or leaves the domain.  Reference [1] also defines the WSS
+exposure time, which is computed by the desktop Python version of this
+software.
 
-This page is the browser version of the Python/VTK package WSSLCS, which
-also computes WSS trajectories, residence time and WSS exposure time.
+Implementation notes: vertex vectors are projected onto the tangent planes,
+transported into the triangles with the discrete polar map of the vertex
+fans, and interpolated linearly inside each triangle; manifolds are traced
+with RK4 in arc length across the triangles (exact edge crossings, vertex
+handling).  This page is the browser version of the Python/VTK package
+WSSLCS, which also computes WSS trajectories, residence time and WSS
+exposure time.
 
 ## Files
 
