@@ -49,6 +49,7 @@ papers.  Please cite them if you use it:
    wall shear stress structures and near wall transport in high Schmidt
    aneurysmal flows*, Journal of Fluid Mechanics, 790, 158–172, 2016.
 
+The original implementation was a C++ code developed in collaboration with Dr. Guoning Chen and is now transformed into a user friendly software. 
 The stable and unstable manifolds of the WSS fixed points are the WSS
 Lagrangian coherent structures (WSS LCS) introduced in [3], which organize
 near-wall transport: near-wall trajectories accumulate along the unstable
