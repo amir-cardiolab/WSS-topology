@@ -1,4 +1,4 @@
-# WSSLCS Explorer
+# WSS LCS Explorer
 
 Fixed points and stable/unstable manifolds (WSS Lagrangian coherent
 structures) of a wall shear stress (WSS) vector field on a triangulated
