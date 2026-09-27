@@ -6,8 +6,8 @@ surface, computed entirely in the browser.
 
 **Live app: https://amir-cardiolab.github.io/WSS-topology/**
 
-Open the page, load a surface file with a point vector array (or use the
-demo data set that loads automatically), and explore the WSS topology:
+Instructions: Open the page, load a surface file with a point vector array (or use the
+demo data set that loads automatically), select vector array option to be your surface vector field in your VTK surface mesh file and click on Run analysis,  and explore the WSS topology:
 
 * **fixed points** of the WSS field: sources, sinks, saddles, foci and
   centers, located from the Poincaré index of every triangle and the zero of
