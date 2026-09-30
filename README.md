@@ -1,4 +1,4 @@
-# WSS LCS Explorer
+# WSSLCS Explorer
 
 Fixed points and stable/unstable manifolds (WSS Lagrangian coherent
 structures) of a wall shear stress (WSS) vector field on a triangulated
@@ -6,8 +6,14 @@ surface, computed entirely in the browser.
 
 **Live app: https://amir-cardiolab.github.io/WSS-topology/**
 
-Instructions: Open the page, load a surface file with a point vector array (or use the
-demo data set that loads automatically), select vector array option to be your surface vector field in your VTK surface mesh file and click on Run analysis,  and explore the WSS topology:
+![WSS LCS Explorer](docs/WSSLCS_explorer.png)
+
+*The WSS LCS Explorer: fixed points (spheres, coloured by type) and the
+unstable (blue) and stable (red) manifolds of a WSS field on a carotid artery
+model, computed in the browser.*
+
+Open the page, load a surface file with a point vector array (or use the
+demo data set that loads automatically), and explore the WSS topology:
 
 * **fixed points** of the WSS field: sources, sinks, saddles, foci and
   centers, located from the Poincaré index of every triangle and the zero of
@@ -49,7 +55,6 @@ papers.  Please cite them if you use it:
    wall shear stress structures and near wall transport in high Schmidt
    aneurysmal flows*, Journal of Fluid Mechanics, 790, 158–172, 2016.
 
-The original implementation was a C++ code developed in collaboration with Dr. Guoning Chen and is now transformed into a user friendly software. 
 The stable and unstable manifolds of the WSS fixed points are the WSS
 Lagrangian coherent structures (WSS LCS) introduced in [3], which organize
 near-wall transport: near-wall trajectories accumulate along the unstable
@@ -83,6 +88,7 @@ exposure time.
 | `wsslcs-core.js` | mesh, field transport, fixed points, manifolds, tracer |
 | `vtk-reader.js` | VTK legacy / XML reader |
 | `worker.js` | runs the analysis in a Web Worker |
+| `docs/WSSLCS_explorer.png` | screenshot used in this README |
 | `demo/Carotid_artery_TAWSS.vtk` | demo data: time-averaged WSS on a carotid artery surface (22 899 points, 45 794 triangles, 7 fixed points) |
 
 The site is static: any web server (or GitHub Pages) can host these files.
