@@ -6,11 +6,13 @@ triangulated surface, computed and rendered entirely in the browser.
 
 **Live app: https://amir-cardiolab.github.io/WSS-topology/**
 
-![WSS LCS Explorer](docs/WSSLCS_explorer.png)
+![WSS LCS Explorer](docs/WSSLCS_explorer2.png)
 
-*The WSS LCS Explorer: fixed points and the unstable (blue) and stable (red)
-manifolds of a WSS field on a carotid artery model, computed in the browser
-(screenshot of an earlier version of the page).*
+*The WSS LCS Explorer on the carotid artery demo: the surface coloured by
+|WSS|, evenly spaced streamlines of the WSS direction field (white), the
+fixed points (saddles as yellow octahedra, a sink as a sphere, foci with a
+ring) and the unstable (blue, attracting WSS LCS) and stable (red, repelling
+WSS LCS) manifolds, all computed in the browser.*
 
 Open the page, load a surface file with a point vector array (or use the
 demo data set that loads automatically), and explore the WSS topology:
@@ -123,8 +125,19 @@ trajectories, residence time and WSS exposure time.
 | `vtk-reader.js` | VTK legacy / XML reader |
 | `worker.js` | runs the analysis in a Web Worker |
 | `colormaps.js` | colour map tables (generated with matplotlib) |
-| `docs/WSSLCS_explorer.png` | screenshot used in this README |
+| `docs/WSSLCS_explorer2.png` | screenshot used in this README |
 | `demo/Carotid_artery_TAWSS.vtk` | demo data: time-averaged WSS on a carotid artery surface (22 899 points, 45 794 triangles, 7 fixed points) |
 
 The site is static: any web server (or GitHub Pages) can host these files.
 three.js is loaded from the jsDelivr CDN and the fonts from Google Fonts.
+
+## Unsteady WSS fields and surface tracer transport
+
+This page analyses one (time-averaged) WSS snapshot.  For time-resolved WSS
+fields and a more comprehensive analysis of near-wall transport, use our
+ParaView plugin **[WSS-topology-unsteady-Paraview](https://github.com/amir-cardiolab/WSS-topology-unsteady-Paraview)**:
+surface tracers advected by the unsteady WSS field (staggered release,
+residence time and WSS exposure time), fixed points and manifolds of each
+time step or of the time-averaged field, fixed points tracked in time, and
+the time-series metrics TAWSS, OSI, RRT, time-averaged WSS divergence and
+TSVI, all directly on the surfaces loaded in ParaView.
