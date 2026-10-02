@@ -35,11 +35,49 @@ export function buildMesh(pointsIn, trianglesIn) {
   for (let i = 0; i < M; i++) { tri[3 * i] = triAll[3 * keep[i]]; tri[3 * i + 1] = triAll[3 * keep[i] + 1]; tri[3 * i + 2] = triAll[3 * keep[i] + 2]; }
   const mesh = { points: P, triangles: tri, nPoints: N, nTris: M, warnings: [] };
   if (M !== triAll.length / 3) mesh.warnings.push(`${triAll.length / 3 - M} degenerate triangles removed`);
+  const flips = orientConsistently(tri, N, M);
+  if (flips) mesh.warnings.push(`${flips} triangles re-oriented for a consistent winding`);
   buildEdges(mesh);
   buildGeometry(mesh);
   buildFrames(mesh);
   buildFans(mesh);
   return mesh;
+}
+
+/**
+ * Make the triangle winding consistent: two triangles sharing an interior edge must traverse it in
+ * opposite directions.  Flood fill over the edge adjacency, flipping as needed; boundary and
+ * non-manifold edges are not crossed.  Returns the number of flipped triangles.  Without this,
+ * mixed-winding input (merged or STL-derived surfaces) gives mirrored direction fields in the
+ * flipped triangles and cancelled vertex normals.
+ */
+function orientConsistently(tri, N, M) {
+  const map = new Map();
+  for (let t = 0; t < M; t++) for (let j = 0; j < 3; j++) {
+    const a = tri[3 * t + j], b = tri[3 * t + (j + 1) % 3], key = (a < b ? a : b) * N + (a < b ? b : a);
+    const list = map.get(key);
+    if (list) list.push(t); else map.set(key, [t]);
+  }
+  const traverses = (t, a, b) => (tri[3 * t] === a && tri[3 * t + 1] === b) || (tri[3 * t + 1] === a && tri[3 * t + 2] === b) || (tri[3 * t + 2] === a && tri[3 * t] === b);
+  const visited = new Uint8Array(M), stack = [];
+  let flips = 0;
+  for (let s = 0; s < M; s++) {
+    if (visited[s]) continue;
+    visited[s] = 1; stack.push(s);
+    while (stack.length) {
+      const t = stack.pop();
+      for (let j = 0; j < 3; j++) {
+        const a = tri[3 * t + j], b = tri[3 * t + (j + 1) % 3], key = (a < b ? a : b) * N + (a < b ? b : a);
+        const list = map.get(key);
+        if (list.length !== 2) continue;
+        const u = list[0] === t ? list[1] : list[0];
+        if (visited[u]) continue;
+        if (traverses(u, a, b)) { const tmp = tri[3 * u + 1]; tri[3 * u + 1] = tri[3 * u + 2]; tri[3 * u + 2] = tmp; flips++; }
+        visited[u] = 1; stack.push(u);
+      }
+    }
+  }
+  return flips;
 }
 
 function buildEdges(mesh) {
@@ -689,6 +727,87 @@ export function computeManifolds(field, fixedPoints, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// evenly spaced streamlines of the direction field (flow texture of the WSS)
+// ---------------------------------------------------------------------------
+/**
+ * Streamlines of the unit direction field with a minimum separation (Jobard & Lefer 1997
+ * style): seeds are taken from the mesh vertices in a scrambled order and rejected when
+ * closer than `separation` to an existing line; a line stops when it comes closer than
+ * `testFactor * separation` to another line, leaves the surface, stalls, or reaches
+ * `maxLength`.  Lengths are relative to the mean edge length.
+ */
+export function computeStreamlines(field, opts = {}) {
+  const { mesh, D } = field;
+  const h0 = mesh.meanEdgeLength;
+  const sep = (opts.separation ?? 2.5) * h0;
+  const dTest = (opts.testFactor ?? 0.5) * sep;
+  const step = (opts.stepFraction ?? 0.6) * h0;
+  const maxLen = (opts.maxLength ?? 80) * h0;
+  const maxLines = opts.maxLines ?? 6000;
+  const minPts = opts.minPoints ?? 6;
+  const cell = sep;
+  const grid = new Map();
+  const key = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
+  const near = (x, y, z, r, skipId) => {
+    const r2 = r * r, cx = Math.floor(x / cell), cy = Math.floor(y / cell), cz = Math.floor(z / cell);
+    for (let i = cx - 1; i <= cx + 1; i++) for (let j = cy - 1; j <= cy + 1; j++) for (let k = cz - 1; k <= cz + 1; k++) {
+      const list = grid.get(`${i},${j},${k}`);
+      if (!list) continue;
+      for (let q = 0; q < list.length; q += 4) {
+        if (list[q + 3] === skipId) continue;
+        const dx = list[q] - x, dy = list[q + 1] - y, dz = list[q + 2] - z;
+        if (dx * dx + dy * dy + dz * dz < r2) return true;
+      }
+    }
+    return false;
+  };
+  const insert = (x, y, z, id) => { const k = key(x, y, z); let list = grid.get(k); if (!list) { list = []; grid.set(k, list); } list.push(x, y, z, id); };
+  // scrambled vertex order (deterministic): golden-ratio hashing of the vertex index
+  const N = mesh.nPoints, order = new Uint32Array(N);
+  for (let i = 0; i < N; i++) order[i] = i;
+  order.sort((a, b) => ((a * 0.6180339887498949) % 1) - ((b * 0.6180339887498949) % 1));
+  const lines = [];
+  const P = mesh.points;
+  for (let oi = 0; oi < N && lines.length < maxLines; oi++) {
+    const v = order[oi];
+    const k0 = mesh.vtxStart[v];
+    if (k0 === mesh.vtxStart[v + 1]) continue;
+    const vx = P[3 * v], vy = P[3 * v + 1], vz = P[3 * v + 2];
+    if (near(vx, vy, vz, sep, -1)) continue;
+    const t0 = mesh.vtxTri[k0], j0 = mesh.vtxCorner[k0];
+    const a0 = j0 === 1 ? mesh.x1[t0] : (j0 === 2 ? mesh.x2[t0] : 0), b0 = j0 === 2 ? mesh.y2[t0] : 0;
+    const id = lines.length;
+    const halves = [];
+    for (const dir of [1, -1]) {
+      const p = { tri: t0, a: a0, b: b0, status: ACTIVE, prevEdge: -1, slide: false };
+      const pts = [], tris = [], spd = [];
+      let len = 0;
+      while (p.status === ACTIVE && len < maxLen) {
+        const { used, speed } = stepParticle(mesh, D, p, step, dir, { normalize: true, integrator: 'rk4', maxRounds: 50 });
+        if (used <= 0) break;
+        len += used;
+        const g = localToGlobal(mesh, p.tri, p.a, p.b);
+        if (near(g[0], g[1], g[2], dTest, id)) break;
+        pts.push(g[0], g[1], g[2]); tris.push(p.tri); spd.push(speed);
+      }
+      halves.push({ pts, tris, spd });
+    }
+    // backward half reversed + seed + forward half
+    const back = halves[1], fwd = halves[0];
+    const nb = back.pts.length / 3, nf = fwd.pts.length / 3, n = nb + 1 + nf;
+    if (n < minPts) { continue; }
+    const pts = new Float32Array(3 * n), tris = new Int32Array(n), spd = new Float32Array(n);
+    for (let i = 0; i < nb; i++) { const s = nb - 1 - i; pts[3 * i] = back.pts[3 * s]; pts[3 * i + 1] = back.pts[3 * s + 1]; pts[3 * i + 2] = back.pts[3 * s + 2]; tris[i] = back.tris[s]; spd[i] = back.spd[s]; }
+    pts[3 * nb] = vx; pts[3 * nb + 1] = vy; pts[3 * nb + 2] = vz; tris[nb] = t0;
+    { const al = bary(mesh, t0, a0, b0); const vv = evaluate(mesh, D, t0, al); spd[nb] = hypot2(vv[0], vv[1]); }
+    for (let i = 0; i < nf; i++) { pts[3 * (nb + 1 + i)] = fwd.pts[3 * i]; pts[3 * (nb + 1 + i) + 1] = fwd.pts[3 * i + 1]; pts[3 * (nb + 1 + i) + 2] = fwd.pts[3 * i + 2]; tris[nb + 1 + i] = fwd.tris[i]; spd[nb + 1 + i] = fwd.spd[i]; }
+    for (let i = 0; i < n; i++) insert(pts[3 * i], pts[3 * i + 1], pts[3 * i + 2], id);    // only accepted lines become obstacles
+    lines.push({ points: pts, triangles: tris, speed: spd, seed: v });
+  }
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
 // complete analysis
 // ---------------------------------------------------------------------------
 export function analyze(points, triangles, vectors, opts = {}) {
@@ -701,18 +820,21 @@ export function analyze(points, triangles, vectors, opts = {}) {
   const t2 = now();
   const branches = opts.manifolds === false ? [] : computeManifolds(field, fixedPoints, opts);
   const t3 = now();
+  const streamlines = opts.streamlines ? computeStreamlines(field, typeof opts.streamlines === 'object' ? opts.streamlines : {}) : [];
+  const t4 = now();
   let indexSum = 0; for (let t = 0; t < mesh.nTris; t++) indexSum += index[t];
   const magOut = new Float64Array(mesh.nPoints), vecOut = new Float64Array(3 * mesh.nPoints);
   for (let i = 0; i < mesh.nPoints; i++) { magOut[i] = field.mag[i] / scale; for (let k = 0; k < 3; k++) vecOut[3 * i + k] = field.tvec[3 * i + k] / scale; }
   return {
     n_points: mesh.nPoints, n_triangles: mesh.nTris, n_edges: mesh.nEdges, n_boundary_edges: mesh.nBoundaryEdges,
     points: mesh.points, triangles: mesh.triangles, magnitude: magOut, vectors: vecOut,
-    bounds: mesh.bounds, center: mesh.center, radius: mesh.radius, mean_edge_length: mesh.meanEdgeLength,
+    tri_normals: Float32Array.from(mesh.triNormals), vertex_normals: Float32Array.from(mesh.vertexNormals),
+    bounds: mesh.bounds, center: mesh.center, radius: mesh.radius, mean_edge_length: mesh.meanEdgeLength, total_area: mesh.totalArea,
     fixed_points: fixedPoints.map(fp => ({ id: fp.id, type: fp.type, type_name: fp.type_name, index: fp.index, triangle: fp.triangle,
       position: fp.position, eigenvalues: fp.eigenvalues.map(v => [v[0] / scale, v[1] / scale]),
       eigvec_out: fp.eigvec_out, eigvec_in: fp.eigvec_in, residual: fp.residual / scale, jacobian: fp.jacobian.map(r => r.map(x => x / scale)) })),
-    branches, poincare_index_sum: indexSum, scale, warnings: mesh.warnings,
-    timings: { mesh_and_field: t1 - t0, fixed_points: t2 - t1, manifolds: t3 - t2 },
+    branches, streamlines, poincare_index_sum: indexSum, scale, warnings: mesh.warnings,
+    timings: { mesh_and_field: t1 - t0, fixed_points: t2 - t1, manifolds: t3 - t2, streamlines: t4 - t3 },
   };
 }
 

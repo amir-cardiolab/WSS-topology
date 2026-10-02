@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WSSLCS Explorer</title>
-<meta name="description" content="Fixed points and stable/unstable manifolds (WSS LCS) of a wall shear stress vector field on a triangulated surface, computed in the browser from VTK files.">
+<title>WSS LCS Explorer</title>
+<meta name="description" content="Fixed points, stable/unstable manifolds (WSS LCS) and the direction field of a wall shear stress vector field on a triangulated surface, computed and rendered in the browser.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2714%27 fill=%27%230b5fc2%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%274%27 fill=%27%23f5c518%27/%3E%3Cpath d=%27M4 16h8M20 16h8M16 4v8M16 20v8%27 stroke=%27%23fff%27 stroke-width=%272.5%27/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   :root {
     color-scheme: light;
     --bg: #eef1f6; --panel: #ffffff; --panel-2: #e6ebf3; --text: #141c2e; --muted: #5b6885; --border: #d1d9e6;
-    --accent: #0b5fc2; --accent-ink: #ffffff; --canvas: #dfe5ee; --ok: #1a7a3e; --err: #b3261e; --row: #f3f6fa;
+    --accent: #0b5fc2; --accent-ink: #ffffff; --canvas: #c9d1dc; --canvas-top: #eceff4; --canvas-mid: #dbe0e8; --ok: #1a7a3e; --err: #b3261e; --row: #f3f6fa; --ink: #1a2235;
     --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-display: "Fraunces", Georgia, "Times New Roman", serif;
     --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -19,40 +19,51 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0d1322; --panel: #131a2c; --panel-2: #1a2237; --text: #e7ebf4; --muted: #99a5c0; --border: #29344d;
-      --accent: #63c4ff; --accent-ink: #061120; --canvas: #0a1020; --ok: #4ade80; --err: #f87171; --row: #172038;
+      --accent: #63c4ff; --accent-ink: #061120; --canvas: #1b2130; --canvas-top: #3b4455; --canvas-mid: #2b3242; --ok: #4ade80; --err: #f87171; --row: #172038; --ink: #f1f4fa;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
     --bg: #0d1322; --panel: #131a2c; --panel-2: #1a2237; --text: #e7ebf4; --muted: #99a5c0; --border: #29344d;
-    --accent: #63c4ff; --accent-ink: #061120; --canvas: #0a1020; --ok: #4ade80; --err: #f87171; --row: #172038;
+    --accent: #63c4ff; --accent-ink: #061120; --canvas: #1b2130; --canvas-top: #3b4455; --canvas-mid: #2b3242; --ok: #4ade80; --err: #f87171; --row: #172038; --ink: #f1f4fa;
     color-scheme: dark;
   }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font-ui); }
   * { box-sizing: border-box; }
   #app { display: flex; height: 100%; min-height: 0; }
-  #panel { width: 400px; min-width: 300px; flex: none; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--border);
-    padding-block: 18px; padding-inline: 18px; display: flex; flex-direction: column; gap: 14px; }
-  #viewport { flex: 1; position: relative; min-width: 0; background: var(--canvas); }
-  #c { display: block; width: 100%; height: 100%; }
-  h1 { font: 600 26px/1.1 var(--font-display); margin: 0; letter-spacing: 0.2px; text-wrap: balance; }
+  #panel { width: 410px; min-width: 300px; flex: none; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--border);
+    padding: 16px 18px 24px; display: flex; flex-direction: column; gap: 12px; }
+  #viewport { flex: 1; position: relative; min-width: 0; background: linear-gradient(var(--canvas-top), var(--canvas)); }
+  #c { display: block; width: 100%; height: 100%; touch-action: none; }
+  #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .label { font: 500 11px var(--font-mono); color: var(--ink); background: color-mix(in srgb, var(--canvas) 78%, transparent); padding: 1px 4px; border-radius: 3px; white-space: nowrap; margin-left: 8px; margin-bottom: 6px; }
+  #tooltip { position: absolute; display: none; pointer-events: none; background: color-mix(in srgb, var(--panel) 93%, transparent); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; max-width: 290px; box-shadow: 0 4px 16px rgba(0,0,0,0.18); z-index: 3; }
+  #tooltip .mono { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+  #viewbar { position: absolute; top: 10px; left: 12px; display: flex; gap: 4px; flex-wrap: wrap; }
+  #viewbar button, #diag { background: color-mix(in srgb, var(--panel) 82%, transparent); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font: 600 12px var(--font-ui); cursor: pointer; }
+  #viewbar button:hover { background: var(--panel); }
+  #viewbar button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  #diag { position: absolute; top: 10px; right: 12px; font: 500 11px var(--font-mono); color: var(--muted); cursor: default; }
+  h1 { font: 600 25px/1.1 var(--font-display); margin: 0; letter-spacing: 0.2px; text-wrap: balance; }
   h2 { font: 600 11.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin: 0 0 8px 0; }
-  .sub { color: var(--muted); margin: 6px 0 0 0; font-size: 13px; max-width: 46ch; }
+  h3 { font: 600 12px/1 var(--font-ui); color: var(--muted); margin: 10px 0 4px; }
+  .sub { color: var(--muted); margin: 6px 0 0 0; font-size: 13px; max-width: 48ch; }
   section { background: var(--panel-2); border-radius: 10px; padding: 12px 12px 10px; }
-  label.row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 6px 0; }
+  label.row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 5px 0; }
   label.row > span:first-child { color: var(--muted); }
   input[type=number], input[type=text], select { width: 140px; background: var(--panel); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 5px 7px; font: inherit; font-family: var(--font-mono); font-size: 12.5px; }
   input[type=file] { width: 100%; font-size: 12px; color: var(--muted); }
   input[type=range] { width: 140px; accent-color: var(--accent); }
   input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+  .two { display: flex; gap: 4px; } .two input[type=number] { width: 68px; }
   button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 7px; padding: 8px 12px; font: 600 13px var(--font-ui); cursor: pointer; }
   button.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
   button:disabled { opacity: 0.5; cursor: wait; }
   button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .btns button { flex: 1 1 120px; }
+  .btns button { flex: 1 1 110px; }
   details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
   #status { font-size: 12.5px; color: var(--muted); min-height: 18px; margin-top: 8px; }
   #status.err { color: var(--err); } #status.ok { color: var(--ok); }
@@ -61,19 +72,18 @@
   th, td { text-align: left; padding: 4px 5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   td.num { font-family: var(--font-mono); font-size: 11.5px; }
   th { color: var(--muted); font-weight: 500; }
-  tr.fp { cursor: pointer; } tr.fp:hover { background: var(--row); }
-  .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
-  .line { display: inline-block; width: 18px; height: 3px; margin-right: 6px; vertical-align: 3px; border-radius: 2px; }
+  tr.fp, tr.br { cursor: pointer; } tr.fp:hover, tr.fp.sel, tr.fp.hl, tr.br:hover, tr.br.hl { background: var(--row); }
+  .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--canvas-mid); }
+  .swatch.diamond { border-radius: 0; transform: rotate(45deg) scale(0.8); } .swatch.square { border-radius: 2px; }
+  .line { display: inline-block; width: 18px; height: 3px; margin-right: 6px; vertical-align: 3px; border-radius: 2px; box-shadow: 0 0 0 1.5px var(--canvas-mid); }
   .legend-item { display: inline-block; margin: 2px 12px 2px 0; font-size: 12px; }
-  #colorbar { width: 100%; height: 10px; border-radius: 3px; margin-top: 8px; }
-  .cb-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+  #colorbar { width: 100%; height: 48px; display: block; margin-top: 8px; }
   pre { font: 11px/1.4 var(--font-mono); white-space: pre-wrap; color: var(--muted); margin: 8px 0 0 0; max-height: 220px; overflow: auto; }
-  #hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); pointer-events: none; }
-  #export textarea { width: 100%; height: 90px; font: 11px var(--font-mono); background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; }
   .note { font-size: 12px; color: var(--muted); margin: 8px 0 0 0; }
+  #hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); pointer-events: none; }
   @media (max-width: 820px) {
     #app { flex-direction: column; }
-    #viewport { flex: none; height: 52vh; }
+    #viewport { flex: none; height: 54vh; }
     #panel { width: 100%; min-width: 0; flex: 1 1 auto; border-right: 0; border-top: 1px solid var(--border); padding-inline: 16px; }
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
@@ -81,11 +91,24 @@
 </head>
 <body>
 <div id="app">
-  <main id="viewport"><canvas id="c"></canvas><div id="hint">drag: rotate · right-drag: pan · wheel: zoom · click a fixed point row to centre it</div></main>
+  <main id="viewport">
+    <canvas id="c"></canvas>
+    <div id="labels"></div>
+    <div id="viewbar">
+      <button type="button" data-view="fit" title="fit the surface in the view (F)">Fit</button>
+      <button type="button" data-view="+x">+X</button><button type="button" data-view="-x">−X</button>
+      <button type="button" data-view="+y">+Y</button><button type="button" data-view="-y">−Y</button>
+      <button type="button" data-view="+z">+Z</button><button type="button" data-view="-z">−Z</button>
+      <button type="button" id="ortho" title="orthographic projection (O)">Ortho</button>
+    </div>
+    <div id="diag" title="device pixel ratio · multisampling · depth buffer · last frame time"></div>
+    <div id="tooltip"></div>
+    <div id="hint">drag: rotate · right-drag: pan · wheel: zoom to cursor · hover a fixed point or a manifold · click to select · double-click to focus · click the gizmo to align</div>
+  </main>
   <aside id="panel">
     <div>
-      <h1>WSSLCS Explorer</h1>
-      <p class="sub">Fixed points and stable/unstable manifolds (WSS LCS) of a wall shear stress vector field on a triangulated surface. Everything runs in your browser.</p>
+      <h1>WSS LCS Explorer</h1>
+      <p class="sub">Fixed points, stable/unstable manifolds (WSS LCS) and the direction field of a wall shear stress vector field on a triangulated surface. Everything runs in your browser.</p>
     </div>
     <section>
       <h2>Input</h2>
@@ -95,6 +118,8 @@
         <label class="row"><span>WSS scale</span><input type="number" id="wss_scale" step="any" value="1"></label>
         <label class="row"><span>compute manifolds</span><input type="checkbox" id="manifolds" checked></label>
         <label class="row"><span>ignore boundary triangles</span><input type="checkbox" id="exclude_boundary" checked></label>
+        <label class="row"><span>evenly spaced streamlines</span><input type="checkbox" id="streamlines" checked></label>
+        <label class="row"><span>streamline separation / edge</span><input type="number" id="sl_sep" step="0.5" min="1" value="2.5"></label>
         <details>
           <summary>Manifold settings</summary>
           <label class="row"><span>step / √area</span><input type="number" id="step_fraction" step="any" value="0.2"></label>
@@ -112,27 +137,59 @@
     </section>
     <section>
       <h2>Display</h2>
+      <label class="row"><span>theme</span><select id="theme"><option value="auto">system</option><option value="dark">dark</option><option value="light">light</option></select></label>
+      <h3>Surface</h3>
+      <label class="row"><span>colour by</span><select id="color_by"><option value="magnitude">|WSS|</option><option value="none">none (neutral)</option></select></label>
+      <label class="row"><span>colour map</span><select id="cmap"><option value="viridis">viridis</option><option value="inferno">inferno</option><option value="magma">magma</option><option value="cividis">cividis</option><option value="turbo">turbo</option><option value="Greys">greys</option></select></label>
+      <label class="row"><span>logarithmic</span><input type="checkbox" id="log_scale"></label>
+      <label class="row"><span>range (2–98 % auto)</span><input type="checkbox" id="auto_range" checked></label>
+      <label class="row"><span>min / max</span><span class="two"><input type="number" id="range_min" step="any" value="0"><input type="number" id="range_max" step="any" value="1"></span></label>
+      <label class="row"><span>units label</span><input type="text" id="units" placeholder="e.g. dyn/cm²" value=""></label>
       <label class="row"><span>surface</span><input type="checkbox" id="show_surface" checked></label>
-      <label class="row"><span>surface opacity</span><input type="range" id="opacity" min="0.05" max="1" step="0.05" value="1"></label>
+      <label class="row"><span>shading</span><select id="shading"><option value="lit">diffuse (no highlights)</option><option value="sheen">diffuse + soft sheen</option><option value="unlit">unlit (exact colours)</option></select></label>
+      <label class="row"><span>opacity</span><input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1"></label>
       <label class="row"><span>wireframe</span><input type="checkbox" id="show_wire"></label>
-      <label class="row"><span>vector glyphs</span><input type="checkbox" id="show_glyphs"></label>
+      <label class="row"><span>ambient occlusion</span><input type="checkbox" id="ao"></label>
+      <label class="row"><span>depth cueing (fog)</span><input type="checkbox" id="fog"></label>
+      <h3>Direction field</h3>
+      <label class="row"><span>streamlines</span><input type="checkbox" id="show_sl" checked></label>
+      <label class="row"><span>streamline width (px)</span><input type="range" id="sl_width" min="0.5" max="3" step="0.25" value="1.25"></label>
+      <label class="row"><span>streamline opacity</span><input type="range" id="sl_opacity" min="0.1" max="1" step="0.05" value="0.55"></label>
+      <label class="row"><span>streamline / glyph ink</span><select id="ink"><option value="auto">auto (contrast with the surface)</option><option value="light">light</option><option value="dark">dark</option></select></label>
+      <label class="row"><span>arrow glyphs</span><input type="checkbox" id="show_glyphs"></label>
+      <label class="row"><span>glyph spacing / edge</span><input type="range" id="glyph_spacing" min="1.5" max="8" step="0.5" value="3"></label>
+      <label class="row"><span>glyph size</span><input type="range" id="glyph_size" min="0.5" max="3" step="0.1" value="1.4"></label>
+      <h3>Topology</h3>
       <label class="row"><span>fixed points</span><input type="checkbox" id="show_fp" checked></label>
+      <label class="row"><span>marker colours</span><select id="palette"><option value="classic">by type (classic)</option><option value="stability">by stability (blue attracting, red repelling)</option></select></label>
+      <label class="row"><span>fixed point size</span><input type="range" id="pointsize" min="0.3" max="4" step="0.1" value="1.3"></label>
+      <label class="row"><span>fixed point labels</span><input type="checkbox" id="show_labels"></label>
       <label class="row"><span>saddle eigenvectors</span><input type="checkbox" id="show_eig" checked></label>
       <label class="row"><span>unstable manifolds (attracting LCS)</span><input type="checkbox" id="show_unstable" checked></label>
       <label class="row"><span>stable manifolds (repelling LCS)</span><input type="checkbox" id="show_stable" checked></label>
-      <label class="row"><span>line width</span><input type="range" id="linewidth" min="1" max="8" step="0.5" value="3"></label>
-      <label class="row"><span>point size</span><input type="range" id="pointsize" min="0.3" max="4" step="0.1" value="1.2"></label>
-      <div class="btns"><button type="button" class="secondary" id="reset_view">Reset view</button></div>
+      <label class="row"><span>hidden parts as dashes</span><input type="checkbox" id="ghost"></label>
+      <label class="row"><span>curve style</span><select id="curve_style"><option value="lines">screen-space strokes + halo</option><option value="tubes">shaded tubes</option></select></label>
+      <label class="row"><span>line width (px)</span><input type="range" id="linewidth" min="1" max="8" step="0.5" value="3"></label>
+      <label class="row"><span>halo width (px)</span><input type="range" id="halo" min="0" max="4" step="0.5" value="1"></label>
+      <label class="row"><span>halo / outline colour</span><select id="halo_color"><option value="auto">auto (theme)</option><option value="dark">dark</option><option value="light">light</option></select></label>
+      <label class="row"><span>lift above surface / edge</span><input type="range" id="lift" min="0" max="1" step="0.05" value="0.25"></label>
+      <label class="row"><span>colour-blind safe palette</span><input type="checkbox" id="cb_safe"></label>
+      <div class="btns">
+        <button type="button" class="secondary" id="reset_view">Reset view</button>
+        <button type="button" class="secondary" id="copylink" title="copy a link that reproduces the current settings and camera">Copy settings link</button>
+        <button type="button" class="secondary" id="shot1">PNG</button>
+        <button type="button" class="secondary" id="shot2">PNG 3× + legend</button>
+        <button type="button" class="secondary" id="shot_t">PNG transparent</button>
+      </div>
     </section>
     <section id="legend">
       <h2>Legend</h2>
       <div id="legend-items"></div>
-      <div id="colorbar"></div>
-      <div class="cb-labels"><span id="cb-min">0</span><span>|WSS|</span><span id="cb-max">1</span></div>
+      <canvas id="colorbar" width="360" height="48"></canvas>
     </section>
     <section id="about">
       <h2>About</h2>
-      <p class="note" style="margin:0">Method of Arzani, Gambaruto, Chen &amp; Shadden, <i>Wall shear stress exposure time: a Lagrangian measure of near-wall stagnation and concentration in cardiovascular flows</i>. Fixed points are located from the Poincaré index of each triangle and the zero of the linear field inside it; manifolds are the trajectories leaving the saddles along their eigenvectors. Source code and the Python package: <a id="repo_link" href="https://github.com/amir-cardiolab/WSS-topology" target="_blank" rel="noopener">github.com/amir-cardiolab/WSS-topology</a>.</p>
+      <p class="note" style="margin:0">Method of Arzani, Gambaruto, Chen &amp; Shadden, <i>Wall shear stress exposure time: a Lagrangian measure of near-wall stagnation and concentration in cardiovascular flows</i> (BMMB 2017); WSS fixed points: Arzani &amp; Shadden (J. Biomech. 2018); WSS LCS: Arzani, Gambaruto, Chen &amp; Shadden (JFM 2016). Fixed points are located from the Poincaré index of each triangle and the zero of the linear field inside it; manifolds are the trajectories leaving the saddles along their eigenvectors; the streamlines are evenly spaced integral curves of the WSS direction field. Source: <a id="repo_link" href="https://github.com/amir-cardiolab/WSS-topology" target="_blank" rel="noopener">github.com/amir-cardiolab/WSS-topology</a>.</p>
     </section>
     <section id="results" hidden>
       <h2>Results</h2>
@@ -146,14 +203,7 @@
           <button type="button" id="dl_csv">Download fixed points (.csv)</button>
           <button type="button" id="dl_json">Download JSON</button>
         </div>
-        <div class="btns">
-          <button type="button" class="secondary" id="copy_csv">Copy fixed points (CSV)</button>
-          <button type="button" class="secondary" id="copy_fpvtk">Copy fixed points (VTK)</button>
-          <button type="button" class="secondary" id="copy_manvtk">Copy manifolds (VTK)</button>
-          <button type="button" class="secondary" id="copy_json">Copy JSON</button>
-        </div>
-        <textarea id="export_text" readonly placeholder="Copied exports also appear here (legacy ASCII VTK text, readable by ParaView)."></textarea>
-        <p class="note">The downloaded .vtk files open directly in ParaView. The desktop (Python) version of WSSLCS additionally computes WSS exposure time and surface tracers.</p>
+        <p class="note">The .vtk files open directly in ParaView.</p>
       </div>
       <pre id="details"></pre>
     </section>
@@ -172,314 +222,987 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { ViewHelper } from 'three/addons/helpers/ViewHelper.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { readVTK, selectVectors } from './vtk-reader.js';
 import { fixedPointsCSV, fixedPointsVTK, manifoldsVTK, TYPE_NAMES } from './wsslcs-core.js';
+import { CMAPS } from './colormaps.js';
 
-const TYPE_COLORS = { 1: '#d946ef', 2: '#06b6d4', 3: '#f5c518', 4: '#4ade80', 6: '#38bdf8', 7: '#fb923c', 0: '#9ca3af' };
-const MANIFOLD_COLORS = { 0: '#2f6fe4', 1: '#e0433c' };     // unstable (forward) blue, stable (backward) red
-const VIRIDIS = ['#440154', '#482878', '#3e4a89', '#31688e', '#26828e', '#1f9e89', '#35b779', '#6ece58', '#b5de2b', '#fde725'];
 const $ = id => document.getElementById(id);
+const query = new URLSearchParams(location.search);
+const LINE_LAYER = 1;            // curves live on layer 1 so that the ambient-occlusion normal/depth pass can skip them
+const SHAPE_OF_TYPE = { 3: 'saddle', 1: 'source', 7: 'source', 2: 'sink', 6: 'sink', 4: 'sink', 0: 'sink' };
+const IS_FOCUS = { 6: true, 7: true };
+const CLASSIC = { 1: '#d946ef', 2: '#06b6d4', 3: '#f5c518', 4: '#4ade80', 6: '#38bdf8', 7: '#fb923c', 0: '#9ca3af' };
+const CLASSIC_CB = { 1: '#cc79a7', 2: '#0072b2', 3: '#f0e442', 4: '#009e73', 6: '#56b4e9', 7: '#e69f00', 0: '#999999' };
+const labelsVisible = () => $('show_fp').checked && $('show_labels').checked;
+const QUERY_IDS = ['theme', 'cmap', 'color_by', 'curve_style', 'ao', 'fog', 'show_sl', 'show_glyphs', 'show_labels', 'cb_safe', 'streamlines', 'sl_sep', 'linewidth', 'halo', 'lift', 'shading', 'log_scale', 'pointsize', 'glyph_spacing', 'glyph_size', 'opacity', 'palette', 'ghost', 'units', 'show_eig', 'show_fp', 'show_wire', 'sl_width', 'sl_opacity', 'show_unstable', 'show_stable', 'show_surface', 'ink', 'halo_color'];
 
-// ---- renderer ----------------------------------------------------------------
-const canvas = $('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(40, 1, 0.001, 1000);
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
-scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 0.9));
-const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
-camera.add(keyLight);
-keyLight.position.set(0.5, 0.8, 1);
-scene.add(camera);
-const root = new THREE.Group();
-scene.add(root);
-const state = { parsed: null, fileName: '', result: null, surface: null, wire: null, glyphs: null, fp: null, eig: null,
-                unstable: null, stable: null, lineMaterials: [], meanEdge: 1, radius: 1, center: new THREE.Vector3() };
-
-function applyTheme() {
-  const bg = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim() || '#dfe5ee';
-  scene.background = new THREE.Color(bg);
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+const isDark = () => (document.documentElement.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+/** curve colours: unstable (attracting LCS) blue, stable (repelling LCS) red, adapted to the theme luminance; or Okabe-Ito */
+function manifoldColors() {
+  if ($('cb_safe').checked) return isDark() ? { 0: '#56b4e9', 1: '#e69f00' } : { 0: '#0072b2', 1: '#d55e00' };
+  return isDark() ? { 0: '#6aa6ff', 1: '#ff6b5e' } : { 0: '#1a4fcf', 1: '#b8281f' };
 }
-applyTheme();
-try {
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
-  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-} catch (e) {}
+/** marker colours: the classic per-type palette, or by stability (hue shared with the manifolds) */
+function markerColor(type) {
+  if ($('palette').value !== 'stability') { const pal = $('cb_safe').checked ? CLASSIC_CB : CLASSIC; return pal[type] || pal[0]; }
+  const m = manifoldColors();
+  if (type === 3) return isDark() ? '#ffffff' : '#111827';
+  if (type === 2 || type === 6) return m[0];
+  if (type === 1 || type === 7) return m[1];
+  return '#9ca3af';
+}
+/** halo and outline colour: the theme's canvas tone, or forced dark / light */
+function haloColor() { const m = $('halo_color').value; return m === 'dark' ? '#1b2130' : m === 'light' ? '#eef1f5' : (cssVar('--canvas-mid') || '#2b3242'); }
+/** ink for streamlines and glyphs: light on a dark surface, dark on a light one, decided from the colour the surface takes at the median |WSS| */
+function inkColor() {
+  const mode = $('ink').value;
+  if (mode === 'light') return '#f4f6fb';
+  if (mode === 'dark') return '#1f2937';
+  let L = isDark() ? 0.2 : 0.6;
+  if (state.result && state.range) {
+    let c;
+    if ($('color_by').value === 'none') c = surfUniforms.uNeutralColor.value;
+    else {
+      const med = state.median, [lo, hi] = state.range, log = $('log_scale').checked;
+      const t = log ? (Math.log(Math.max(med, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) : (med - lo) / (hi - lo);
+      const k = Math.min(255, Math.max(0, Math.round((Number.isFinite(t) ? t : 0.5) * 255)));
+      c = new THREE.Color(lutBytes[4 * k] / 255, lutBytes[4 * k + 1] / 255, lutBytes[4 * k + 2] / 255).convertSRGBToLinear();
+    }
+    L = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  }
+  return L < 0.3 ? '#f4f6fb' : '#1f2937';
+}
+function refreshInk() {
+  const ink = new THREE.Color(inkColor());
+  if (state.streamlines) state.streamlines.material.color.copy(ink);
+  if (state.glyphs) state.glyphs.material.color.copy(ink);
+  if (state.result) buildLegend(state.result);
+  invalidate();
+}
+
+// ---- renderer, scene, post-processing ----------------------------------------------------
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: true, stencil: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;          // scientific colour maps must not be remapped
+renderer.autoClear = false;
+const scene = new THREE.Scene();
+const root = new THREE.Group();                      // GPU coordinates are recentred: root.position = centre of the data
+scene.add(root);
+// exposure-calibrated lights that follow the camera: a hemisphere whose sky is the camera's up direction and a key light from the upper left.
+// With diffuse shading the brightest colour is (2.4 + 0.7) / pi = 0.99 of the colour-map colour, so nothing clips and no hue shifts.
+const hemi = new THREE.HemisphereLight(0xffffff, 0xcfd6e0, 2.4);
+scene.add(hemi);
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.7);
+keyLight.position.set(-0.6, 0.9, 1.0);
+const keyAim = new THREE.Object3D(); keyAim.position.set(0, 0, -1); keyLight.target = keyAim;
+const labelRenderer = new CSS2DRenderer({ element: $('labels') });
+let camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
+let controls = null, viewHelper = null, composer = null, renderPass = null, gtao = null;
+const clock = new THREE.Clock();
+let needsRender = true, lastFrameMs = 0;
+const invalidate = () => { needsRender = true; };
+
+const state = { parsed: null, fileName: '', result: null, surface: null, wire: null, glyphs: null, streamlines: null, fpGroup: null, eig: null,
+  unstable: null, stable: null, labels: [], lineMaterials: [], meanEdge: 1, radius: 1, center: new THREE.Vector3(), range: null,
+  markers: [], fpMeshes: [], selected: -1, ortho: false, markerRadius: 0, flight: null, median: 0 };
+
+// ---- colour map as a 256-entry LUT texture sampled in the fragment shader (exact colours, no interpolation of colours across triangles) -------
+const lutBytes = new Uint8Array(256 * 4);
+const lutTex = new THREE.DataTexture(lutBytes, 256, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+lutTex.colorSpace = THREE.SRGBColorSpace; lutTex.minFilter = lutTex.magFilter = THREE.LinearFilter; lutTex.wrapS = THREE.ClampToEdgeWrapping; lutTex.generateMipmaps = false;
+const surfUniforms = { uLut: { value: lutTex }, uRange: { value: new THREE.Vector2(0, 1) }, uLog: { value: 0 }, uNeutral: { value: 0 }, uNeutralColor: { value: new THREE.Color('#cfd5de') } };
+function hexToRgb(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+function uploadLUT(name) {
+  const stops = (CMAPS[name] || CMAPS.viridis).map(hexToRgb);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255 * (stops.length - 1), k = Math.min(Math.floor(t), stops.length - 2), f = t - k;
+    for (let c = 0; c < 3; c++) lutBytes[4 * i + c] = Math.round(stops[k][c] + (stops[k + 1][c] - stops[k][c]) * f);
+    lutBytes[4 * i + 3] = 255;
+  }
+  lutTex.needsUpdate = true;
+}
+uploadLUT('viridis');
+function patchSurface(mat) {
+  mat.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, surfUniforms);
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', 'attribute float scalar;\nvarying float vScalar;\n#include <common>')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalar = scalar;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', 'uniform sampler2D uLut;\nuniform vec2 uRange;\nuniform float uLog;\nuniform float uNeutral;\nuniform vec3 uNeutralColor;\nvarying float vScalar;\n#include <common>')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n{ float s_ = uLog > 0.5 ? log(max(vScalar, 1e-30)) : vScalar; float t_ = clamp((s_ - uRange.x) / (uRange.y - uRange.x), 0.0, 1.0); vec3 lut_ = texture2D(uLut, vec2(t_, 0.5)).rgb; diffuseColor.rgb *= mix(lut_, uNeutralColor, uNeutral); }');
+  };
+  mat.customProgramCacheKey = () => 'wss-lut';
+  return mat;
+}
+
+function gradientBackground() {
+  const top = hexToRgb(cssVar('--canvas-top') || '#3b4455'), bot = hexToRgb(cssVar('--canvas') || '#1b2130');
+  const data = new Uint8Array(64 * 4);
+  for (let i = 0; i < 64; i++) { const f = i / 63; for (let c = 0; c < 3; c++) data[4 * i + c] = Math.round(bot[c] + (top[c] - bot[c]) * f); data[4 * i + 3] = 255; }
+  const tex = new THREE.DataTexture(data, 1, 64, THREE.RGBAFormat, THREE.UnsignedByteType);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
+  return tex;
+}
+function applyTheme() {
+  const t = $('theme').value;
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  if (scene.background && scene.background.isTexture) scene.background.dispose();
+  scene.background = gradientBackground();
+  const mid = new THREE.Color(cssVar('--canvas-mid') || '#2b3242');
+  if (scene.fog) scene.fog.color.copy(mid);
+  if (state.wire) state.wire.material.color.copy(mid);
+  surfUniforms.uNeutralColor.value.set(isDark() ? '#8f99ad' : '#cfd5de');
+  if (state.result) { buildFixedPoints(state.result); buildManifolds(state.result); buildStreamlines(state.result); buildGlyphs(state.result); buildLegend(state.result); buildResults(state.result); if (state.selected >= 0) selectFixedPoint(state.selected); }
+  drawColorbar();
+  invalidate();
+}
+$('theme').onchange = applyTheme;
+try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) {}
+
+/** OrbitControls (r160) bake the camera's up vector at construction, so they are rebuilt whenever the camera or its up vector changes */
+function makeControls(target) {
+  const t = target ? target.clone() : (controls ? controls.target.clone() : new THREE.Vector3());
+  if (controls) controls.dispose();
+  controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true; controls.dampingFactor = 0.1; controls.screenSpacePanning = true; controls.zoomToCursor = true;
+  controls.target.copy(t);
+  controls.addEventListener('change', invalidate);
+  controls.update();
+  if (viewHelper) viewHelper.center = controls.target;
+}
+/** GTAOPass (r160) never updates its PERSPECTIVE_CAMERA define after construction */
+function setAOProjection() {
+  if (!gtao) return;
+  const persp = camera.isPerspectiveCamera ? 1 : 0;
+  if (gtao.gtaoMaterial.defines.PERSPECTIVE_CAMERA !== persp) { gtao.gtaoMaterial.defines.PERSPECTIVE_CAMERA = persp; gtao.gtaoMaterial.needsUpdate = true; }
+}
+function setupCamera(ortho) {
+  const w = canvas.clientWidth || 800, h = canvas.clientHeight || 600, aspect = w / h;
+  const old = camera;
+  const pos = old.position.clone(), target = controls ? controls.target.clone() : new THREE.Vector3(), up = old.up.clone();
+  if (old.isOrthographicCamera && old.zoom !== 1) pos.copy(target).addScaledVector(old.position.clone().sub(target), 1 / old.zoom);   // an orthographic zoom becomes a camera distance
+  const R = state.radius || 1;
+  if (ortho) {
+    const d = pos.distanceTo(target), half = d * Math.tan(THREE.MathUtils.degToRad(35 / 2));
+    camera = new THREE.OrthographicCamera(-half * aspect, half * aspect, half, -half, -2 * R, 4 * R);
+  } else {
+    camera = new THREE.PerspectiveCamera(35, aspect, R / 200, R * 40);
+  }
+  camera.layers.enableAll();
+  camera.position.copy(pos); camera.up.copy(up); camera.lookAt(target);
+  camera.add(keyLight, keyAim); scene.add(camera);
+  if (old !== camera) scene.remove(old);
+  makeControls(target);
+  if (renderPass) renderPass.camera = camera;
+  if (gtao) { gtao.camera = camera; setAOProjection(); }
+  if (viewHelper) viewHelper.dispose();
+  viewHelper = new ViewHelper(camera, canvas);
+  viewHelper.center = controls.target;
+  state.ortho = ortho;
+  $('ortho').classList.toggle('active', ortho);
+  invalidate();
+}
+function setupComposer() {
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+  composer = new EffectComposer(renderer, target);
+  renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+  gtao = new GTAOPass(scene, camera, size.x, size.y);
+  gtao.output = GTAOPass.OUTPUT.Default;
+  gtao.blendIntensity = 0.55;
+  gtao.enabled = $('ao').checked;
+  // the curves (layer 1) are excluded from the normal/depth pass of the ambient occlusion
+  const gtaoRender = gtao.render.bind(gtao);
+  gtao.render = (r, wb, rb, dt, mask) => {
+    const bg = scene.background; scene.background = null;    // the background plane would be rasterised as geometry by the override material
+    camera.layers.set(0);
+    try { gtaoRender(r, wb, rb, dt, mask); } finally { scene.background = bg; camera.layers.enableAll(); }
+  };
+  gtao.normalMaterial.side = THREE.DoubleSide;               // the wall is drawn double-sided
+  composer.addPass(gtao);
+  composer.addPass(new OutputPass());
+  setAOProjection();
+}
+function tuneAO() {
+  if (!gtao) return;
+  const R = state.radius || 1;
+  gtao.updateGtaoMaterial({ radius: 0.03 * R, distanceExponent: 1.0, thickness: 1.0, distanceFallOff: 1.0, scale: 1.0, samples: 16, screenSpaceRadius: false });
+  gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, radiusExponent: 1, rings: 2, samples: 16 });
+  if (gtao.setSceneClipBox && root.children.length) gtao.setSceneClipBox(new THREE.Box3().setFromObject(root));
+}
+setupCamera(false);
+setupComposer();
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); setStatus('WebGL context lost — waiting for it to be restored …', 'err'); });
+canvas.addEventListener('webglcontextrestored', () => { setupComposer(); if (state.result) buildScene(state.result); setStatus('WebGL context restored.', 'ok'); invalidate(); });
 
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (w === 0 || h === 0) return;
+  if (w === 0 || h === 0) return false;
+  const want = Math.min(window.devicePixelRatio, 2), prChanged = Math.abs(renderer.getPixelRatio() - want) > 1e-3;
+  if (prChanged) renderer.setPixelRatio(want);
   const pr = renderer.getPixelRatio();
-  if (canvas.width !== Math.floor(w * pr) || canvas.height !== Math.floor(h * pr)) {
+  if (prChanged || canvas.width !== Math.floor(w * pr) || canvas.height !== Math.floor(h * pr)) {
     renderer.setSize(w, h, false);
-    camera.aspect = w / h;
+    if (prChanged) composer.setPixelRatio(pr);        // EffectComposer caches its own pixel ratio
+    composer.setSize(w, h);
+    labelRenderer.setSize(w, h);
+    if (camera.isPerspectiveCamera) camera.aspect = w / h;
+    else { const half = camera.top; camera.left = -half * w / h; camera.right = half * w / h; }
     camera.updateProjectionMatrix();
+    for (const m of state.lineMaterials) m.resolution.set(w, h);
+    return true;
   }
-  for (const m of state.lineMaterials) m.resolution.set(w, h);
+  return false;
 }
-function animate() { resize(); controls.update(); renderer.render(scene, camera); requestAnimationFrame(animate); }
-animate();
-
-function colormap(t) {
-  t = Math.min(Math.max(t, 0), 1) * (VIRIDIS.length - 1);
-  const i = Math.floor(t), f = t - i;
-  return new THREE.Color(VIRIDIS[i]).lerp(new THREE.Color(VIRIDIS[Math.min(i + 1, VIRIDIS.length - 1)]), f);
+const camUp = new THREE.Vector3(), camDir = new THREE.Vector3(), camTmp = new THREE.Vector3();
+/** per frame: near/far planes hug the data, lights follow the camera, fog and marker size follow the distance */
+function updateCameraDependent() {
+  const R = state.radius || 1;
+  const zc = camTmp.copy(root.position).sub(camera.position).dot(camera.getWorldDirection(camDir));   // view-space depth of the data centre
+  if (camera.isPerspectiveCamera) {
+    const near = Math.max(zc - 1.05 * R, R / 500), far = Math.max(zc + 2.1 * R, near + R);
+    if (Math.abs(camera.near - near) > 1e-6 * R || Math.abs(camera.far - far) > 1e-6 * R) { camera.near = near; camera.far = far; camera.updateProjectionMatrix(); }
+  } else {
+    const near = zc - 1.5 * R, far = zc + 1.5 * R;
+    if (Math.abs(camera.near - near) > 1e-6 * R || Math.abs(camera.far - far) > 1e-6 * R) { camera.near = near; camera.far = far; camera.updateProjectionMatrix(); }
+  }
+  controls.minDistance = 3 * state.meanEdge; controls.maxDistance = 12 * R;
+  hemi.position.copy(camUp.set(0, 1, 0).applyQuaternion(camera.quaternion));     // the hemisphere light's direction is its position: sky = camera up
+  if ($('fog').checked) {
+    const d = camera.position.distanceTo(controls.target);
+    if (!scene.fog) scene.fog = new THREE.Fog(new THREE.Color(cssVar('--canvas-mid') || '#2b3242'), 1, 2);
+    scene.fog.near = d - 0.3 * R; scene.fog.far = d + 3.2 * R;
+  } else scene.fog = null;
+  updateMarkerScale();
 }
-function percentile(arr, p) { const s = Float64Array.from(arr).sort(); return s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))]; }
+function render() {
+  const t0 = performance.now();
+  updateCameraDependent();
+  renderer.clear();
+  composer.render();
+  if (viewHelper) viewHelper.render(renderer);
+  labelRenderer.render(scene, camera);
+  lastFrameMs = performance.now() - t0;
+}
+let diagTimer = 0;
+function animate(ts) {
+  const resized = resize();
+  const moved = controls.update();
+  let flying = false;
+  if (state.flight) flying = stepFlight(ts);
+  if (viewHelper && viewHelper.animating) { viewHelper.update(clock.getDelta()); needsRender = true; } else clock.getDelta();
+  if (needsRender || moved || resized || flying) { render(); needsRender = false; }
+  if (ts - diagTimer > 1000) {
+    diagTimer = ts;
+    const gl = renderer.getContext();
+    $('diag').textContent = `DPR ${renderer.getPixelRatio().toFixed(1)} · MSAA ${gl.getParameter(gl.SAMPLES)}× · depth ${gl.getParameter(gl.DEPTH_BITS)} bit · ${lastFrameMs.toFixed(1)} ms`;
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
 
+// ---- colour range and bar -----------------------------------------------------------------------
+function percentile(arr, p) { const s = Float64Array.from(arr).filter(Number.isFinite).sort(); return s.length ? s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))] : 0; }
+function niceTicks(lo, hi, n = 5) {
+  const span = hi - lo; if (!(span > 0)) return [lo];
+  const raw = span / (n - 1), p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p, step = (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+  const ticks = [], k0 = Math.ceil(lo / step), k1 = Math.floor((hi + 1e-9 * span) / step);
+  for (let k = k0; k <= k1 && ticks.length < 50; k++) ticks.push(+(k * step).toPrecision(12));
+  return ticks;
+}
+function updateRange() {
+  if (!state.result) return;
+  const vals = state.result.magnitude, log = $('log_scale').checked;
+  let lo, hi;
+  if ($('auto_range').checked) {
+    const s = vals.filter(x => Number.isFinite(x) && (!log || x > 0)).sort();          // typed-array sort is numeric
+    if (!s.length) { lo = log ? 1e-3 : 0; hi = 1; setStatus(log ? '|WSS| has no positive values: a default colour range is used.' : '|WSS| has no finite values: a default colour range is used.', 'err'); }
+    else { lo = s[Math.floor(0.02 * (s.length - 1))]; hi = s[Math.floor(0.98 * (s.length - 1))]; if (!(hi > lo)) { lo = s[0]; hi = s[s.length - 1]; } }
+    $('range_min').value = (+lo.toPrecision(4)).toString(); $('range_max').value = (+hi.toPrecision(4)).toString();
+  } else { const a = parseFloat($('range_min').value), b = parseFloat($('range_max').value); lo = Number.isFinite(a) ? a : 0; hi = Number.isFinite(b) ? b : 1; }
+  if (hi < lo) [lo, hi] = [hi, lo];
+  if (!(hi > lo)) hi = lo + Math.max(1e-12, Math.abs(lo) * 1e-9);
+  if (log) { lo = Math.max(lo, 1e-3 * Math.max(Math.abs(hi), 1e-300)); hi = Math.max(hi, lo * 1.001); }
+  state.range = [lo, hi];
+  surfUniforms.uLog.value = log ? 1 : 0;
+  surfUniforms.uRange.value.set(log ? Math.log(lo) : lo, log ? Math.log(hi) : hi);
+  surfUniforms.uNeutral.value = $('color_by').value === 'none' ? 1 : 0;
+  uploadLUT($('cmap').value);
+  drawColorbar();
+  refreshInk();
+}
+function drawColorbar(ctx = null, x0 = 8, y0 = 6, w = null, barH = 16, scale = 1) {
+  const own = !ctx;
+  const cv = $('colorbar');
+  if (own) { ctx = cv.getContext('2d'); ctx.clearRect(0, 0, cv.width, cv.height); w = cv.width - 16; }
+  if (!state.result || !state.range || $('color_by').value === 'none') return;
+  const [lo, hi] = state.range, log = $('log_scale').checked, x1 = x0 + w, y1 = y0 + barH;
+  const img = ctx.createImageData(256, 1);
+  img.data.set(lutBytes);
+  const tmp = document.createElement('canvas'); tmp.width = 256; tmp.height = 1; tmp.getContext('2d').putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(tmp, x0, y0, w, barH);
+  ctx.strokeStyle = cssVar('--canvas-mid') || '#2b3242'; ctx.lineWidth = scale; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, barH - 1);
+  ctx.fillStyle = cssVar('--muted'); ctx.font = `${11 * scale}px ${cssVar('--font-mono') || 'monospace'}`; ctx.textBaseline = 'top';
+  const fmtTick = v => (Math.abs(v) >= 1e4 || (Math.abs(v) < 1e-2 && v !== 0)) ? v.toExponential(1) : (+v.toPrecision(3)).toString();
+  let ticks;
+  if (log) { ticks = []; const e0 = Math.ceil(Math.log10(lo)), e1 = Math.floor(Math.log10(hi)); if (Number.isFinite(e0) && Number.isFinite(e1)) for (let e = e0; e <= e1 && ticks.length < 40; e++) ticks.push(Math.pow(10, e)); if (ticks.length < 2) ticks = [lo, hi]; }
+  else ticks = niceTicks(lo, hi, 5);
+  const pos = v => x0 + (log ? (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) : (v - lo) / (hi - lo)) * w;
+  for (const v of ticks) {
+    const x = pos(v); if (x < x0 - 1 || x > x1 + 1) continue;
+    ctx.fillRect(x - 0.5 * scale, y1, scale, 4 * scale);
+    ctx.textAlign = x < x0 + 20 * scale ? 'left' : (x > x1 - 20 * scale ? 'right' : 'center');
+    ctx.fillText(fmtTick(v), x, y1 + 6 * scale);
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = cssVar('--text');
+  const units = $('units').value.trim();
+  ctx.fillText(`|WSS|${units ? ' (' + units + ')' : ''}${log ? ', log scale' : ''}${$('auto_range').checked ? ' — 2–98 % range' : ''}`, x0 + w / 2, y1 + 20 * scale);
+}
+
+// ---- scene construction ---------------------------------------------------------------------------
+function dispose(o) {
+  if (!o) return;
+  const shared = new Set([arrowGeom, ...(shapeGeoms ? Object.values(shapeGeoms) : [])]);   // template geometries are reused across rebuilds
+  o.traverse?.(c => {
+    if (c.isInstancedMesh) c.dispose();                                                     // frees the instance buffers held by the renderer
+    if (c.geometry && !shared.has(c.geometry)) c.geometry.dispose();
+    if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => { m.dispose?.(); if (m.isLineMaterial) { const i = state.lineMaterials.indexOf(m); if (i >= 0) state.lineMaterials.splice(i, 1); } });
+  });
+  root.remove(o);
+}
 function clearScene() {
-  while (root.children.length) {
-    const o = root.children.pop();
-    o.traverse?.(c => { c.geometry?.dispose?.(); if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose?.()); });
+  for (const k of ['surface', 'wire', 'glyphs', 'streamlines', 'fpGroup', 'eig', 'unstable', 'stable']) { dispose(state[k]); state[k] = null; }
+  for (const l of state.labels) l.removeFromParent();
+  state.labels = []; state.lineMaterials = []; state.fpMeshes = []; state.markers = []; state.selected = -1;
+}
+const c0 = () => state.center;
+const triNormal = (d, t, out) => out.set(d.tri_normals[3 * t], d.tri_normals[3 * t + 1], d.tri_normals[3 * t + 2]);
+/** display copy of a branch: resampled to ~0.5 mean edge spacing, lifted along the triangle normals, recentred */
+function branchDisplay(br, d, lift) {
+  const n = br.points.length / 3, keep = [0], spacing = 0.5 * d.mean_edge_length;
+  let last = br.arclength[0];
+  for (let i = 1; i < n - 1; i++) if (br.arclength[i] - last >= spacing) { keep.push(i); last = br.arclength[i]; }
+  if (n > 1) keep.push(n - 1);
+  const out = new Float32Array(3 * keep.length), nrm = new THREE.Vector3(), c = c0();
+  keep.forEach((i, k) => {
+    triNormal(d, br.triangles[i], nrm);
+    out[3 * k] = br.points[3 * i] + lift * nrm.x - c.x; out[3 * k + 1] = br.points[3 * i + 1] + lift * nrm.y - c.y; out[3 * k + 2] = br.points[3 * i + 2] + lift * nrm.z - c.z;
+  });
+  return out;
+}
+function liftedPositions(points, triangles, d, lift) {
+  const n = points.length / 3, out = new Float32Array(3 * n), nrm = new THREE.Vector3(), c = c0();
+  for (let i = 0; i < n; i++) {
+    triNormal(d, triangles[i], nrm);
+    out[3 * i] = points[3 * i] + lift * nrm.x - c.x; out[3 * i + 1] = points[3 * i + 1] + lift * nrm.y - c.y; out[3 * i + 2] = points[3 * i + 2] + lift * nrm.z - c.z;
   }
-  state.lineMaterials = [];
-  for (const k of ['surface', 'wire', 'glyphs', 'fp', 'eig', 'unstable', 'stable']) state[k] = null;
+  return out;
+}
+function lineMaterial(opts) {
+  const m = new LineMaterial(Object.assign({ worldUnits: false }, opts));
+  m.fog = true;                                                                   // ShaderMaterial defaults to fog = false
+  m.resolution.set(canvas.clientWidth || 800, canvas.clientHeight || 600);         // CSS pixels: a line width means CSS px on every display
+  state.lineMaterials.push(m);
+  return m;
+}
+/** pseudo-tube shading across the stroke: centre highlight, darker edges, hue preserved */
+function tubeShade(mat) {
+  mat.onBeforeCompile = s => {
+    s.fragmentShader = s.fragmentShader.replace('vec4 diffuseColor = vec4( diffuse, alpha );',
+      'float tt_ = clamp(vUv.x, -1.0, 1.0); float nz_ = sqrt(max(0.0, 1.0 - tt_ * tt_)); vec3 shaded_ = diffuse * (0.62 + 0.38 * nz_) + vec3(0.16) * pow(nz_, 14.0); vec4 diffuseColor = vec4( shaded_, alpha );');
+  };
+  mat.customProgramCacheKey = () => 'tube-shade';
+  return mat;
+}
+/** a curve = halo (wider, slightly lower, background colour) + stroke + dashed ghost of the part hidden behind the wall */
+function curve(positions, haloPositions, colorHex, width, halo, h, ghost) {
+  const g = new LineGeometry(); g.setPositions(positions);
+  const group = new THREE.Group();
+  if (halo > 0) {
+    const hg = new LineGeometry(); hg.setPositions(haloPositions);
+    const hm = lineMaterial({ color: new THREE.Color(haloColor()), linewidth: width + 2 * halo, alphaToCoverage: true, polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: 4 });
+    hm.userData.halo = true;
+    const hl = new Line2(hg, hm); hl.renderOrder = 1; hl.layers.set(LINE_LAYER); group.add(hl);
+  }
+  const m = tubeShade(lineMaterial({ color: new THREE.Color(colorHex), linewidth: width, alphaToCoverage: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -8 }));
+  m.userData.stroke = true;
+  const line = new Line2(g, m); line.renderOrder = 2; line.layers.set(LINE_LAYER); group.add(line);
+  group.userData.main = line;
+  if (ghost) {
+    // drawn where the depth buffer holds something nearer than the curve (GreaterDepth), i.e. where the wall is in front: the dashes say "behind the surface".
+    // It is rendered right after the wall and before the halos and strokes (opaque list, custom blending keeps it translucent), so it never
+    // tests against the curves themselves; later objects (halos, strokes, markers) draw over it where they are visible.
+    const gm = lineMaterial({ color: new THREE.Color(colorHex), linewidth: Math.max(1, 0.8 * width), opacity: 0.35, depthWrite: false, depthFunc: THREE.GreaterDepth,
+      transparent: false, blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendEquation: THREE.AddEquation,
+      dashed: true, dashSize: 2.5 * h, gapSize: 1.5 * h, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -8 });
+    gm.userData.ghost = true;
+    const gl = new Line2(g, gm); gl.computeLineDistances(); gl.renderOrder = 0.8; gl.layers.set(LINE_LAYER); group.add(gl);
+  }
+  return group;
 }
 
 function buildScene(d) {
   clearScene();
   state.result = d;
-  state.meanEdge = d.mean_edge_length;
-  state.radius = d.radius;
-  state.center.set(d.center[0], d.center[1], d.center[2]);
-  const pos = Float32Array.from(d.points);
+  state.median = percentile(d.magnitude, 0.5);
+  state.meanEdge = d.mean_edge_length; state.radius = d.radius; state.center.set(d.center[0], d.center[1], d.center[2]);
+  root.position.copy(state.center);
+  const N = d.n_points, pos = new Float32Array(3 * N);
+  for (let i = 0; i < N; i++) { pos[3 * i] = d.points[3 * i] - d.center[0]; pos[3 * i + 1] = d.points[3 * i + 1] - d.center[1]; pos[3 * i + 2] = d.points[3 * i + 2] - d.center[2]; }
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geom.setIndex(new THREE.BufferAttribute(Uint32Array.from(d.triangles), 1));
-  geom.computeVertexNormals();
-  const mag = d.magnitude;
-  const lo = percentile(mag, 0.02), hi = Math.max(percentile(mag, 0.98), lo + 1e-12);
-  const colors = new Float32Array(mag.length * 3);
-  for (let i = 0; i < mag.length; i++) { const c = colormap((mag[i] - lo) / (hi - lo)); colors[3 * i] = c.r; colors[3 * i + 1] = c.g; colors[3 * i + 2] = c.b; }
-  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  state.surface = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: parseFloat($('opacity').value) }));
+  geom.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(d.vertex_normals), 3));
+  geom.setAttribute('scalar', new THREE.BufferAttribute(Float32Array.from(d.magnitude, v => Number.isFinite(v) ? v : 0), 1));
+  state.surface = new THREE.Mesh(geom, makeSurfaceMaterial());
   state.surface.visible = $('show_surface').checked;
+  state.surface.renderOrder = 0;
   root.add(state.surface);
-  state.wire = new THREE.LineSegments(new THREE.WireframeGeometry(geom), new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.35 }));
+  state.wire = new THREE.LineSegments(new THREE.WireframeGeometry(geom), new THREE.LineBasicMaterial({ color: new THREE.Color(cssVar('--canvas-mid') || '#2b3242'), transparent: true, opacity: 0.6 }));
   state.wire.visible = $('show_wire').checked;
   root.add(state.wire);
-  $('cb-min').textContent = lo.toPrecision(3); $('cb-max').textContent = hi.toPrecision(3);
-  $('colorbar').style.background = `linear-gradient(90deg, ${VIRIDIS.join(',')})`;
-  // vector glyphs (sub-sampled)
-  const n = d.n_points, stride = Math.max(1, Math.round(n / 2500)), L = 1.5 * d.mean_edge_length;
-  const gp = [];
-  for (let i = 0; i < n; i += stride) {
-    const vx = d.vectors[3 * i], vy = d.vectors[3 * i + 1], vz = d.vectors[3 * i + 2];
-    const m = Math.hypot(vx, vy, vz) || 1;
-    const x = pos[3 * i], y = pos[3 * i + 1], z = pos[3 * i + 2];
-    const ex = x + L * vx / m, ey = y + L * vy / m, ez = z + L * vz / m;
-    const hx = vx / m * L * 0.3, hy = vy / m * L * 0.3, hz = vz / m * L * 0.3;
-    const px = -hy, py = hx, pz = 0.3 * hz;
-    gp.push(x, y, z, ex, ey, ez, ex, ey, ez, ex - hx + px * 0.5, ey - hy + py * 0.5, ez - hz + pz * 0.5, ex, ey, ez, ex - hx - px * 0.5, ey - hy - py * 0.5, ez - hz - pz * 0.5);
-  }
-  const gg = new THREE.BufferGeometry();
-  gg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(gp), 3));
-  const glyphColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#141c2e');
-  state.glyphs = new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: glyphColor, transparent: true, opacity: 0.75 }));
-  state.glyphs.visible = $('show_glyphs').checked;
-  root.add(state.glyphs);
-  // fixed points
-  const fps = d.fixed_points;
-  if (fps.length) {
-    const r = parseFloat($('pointsize').value) * d.mean_edge_length;
-    state.fp = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1 }), fps.length);
-    const mtx = new THREE.Matrix4();
-    fps.forEach((fp, i) => {
-      mtx.makeScale(r, r, r).setPosition(fp.position[0], fp.position[1], fp.position[2]);
-      state.fp.setMatrixAt(i, mtx);
-      state.fp.setColorAt(i, new THREE.Color(TYPE_COLORS[fp.type] || TYPE_COLORS[0]));
-    });
-    state.fp.instanceMatrix.needsUpdate = true;
-    if (state.fp.instanceColor) state.fp.instanceColor.needsUpdate = true;
-    state.fp.visible = $('show_fp').checked;
-    root.add(state.fp);
-    const ep = [], ec = [], Le = 3 * d.mean_edge_length;
-    for (const fp of fps) {
-      if (fp.type !== 3) continue;
-      for (const [vec, col] of [[fp.eigvec_out, MANIFOLD_COLORS[0]], [fp.eigvec_in, MANIFOLD_COLORS[1]]]) {
-        const c = new THREE.Color(col);
-        for (const s of [-1, 1]) {
-          ep.push(fp.position[0], fp.position[1], fp.position[2], fp.position[0] + s * Le * vec[0], fp.position[1] + s * Le * vec[1], fp.position[2] + s * Le * vec[2]);
-          ec.push(c.r, c.g, c.b, c.r, c.g, c.b);
-        }
-      }
-    }
-    const eg = new THREE.BufferGeometry();
-    eg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ep), 3));
-    eg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(ec), 3));
-    state.eig = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ vertexColors: true }));
-    state.eig.visible = $('show_eig').checked;
-    root.add(state.eig);
-  }
-  // manifolds
-  state.unstable = new THREE.Group(); state.stable = new THREE.Group();
-  const lw = parseFloat($('linewidth').value);
-  for (const br of d.branches) {
-    if (br.points.length < 6) continue;
-    const g = new LineGeometry();
-    g.setPositions(Array.from(br.points));
-    const m = new LineMaterial({ color: new THREE.Color(MANIFOLD_COLORS[br.kind]).getHex(), linewidth: lw, worldUnits: false });
-    m.resolution.set(canvas.clientWidth || 800, canvas.clientHeight || 600);
-    state.lineMaterials.push(m);
-    const line = new Line2(g, m);
-    line.computeLineDistances();
-    (br.kind === 0 ? state.unstable : state.stable).add(line);
-  }
-  state.unstable.visible = $('show_unstable').checked; state.stable.visible = $('show_stable').checked;
-  root.add(state.unstable, state.stable);
-  resetView();
+  updateRange();
+  buildStreamlines(d);
+  buildGlyphs(d);
+  buildFixedPoints(d);
+  buildManifolds(d);
+  tuneAO();
   buildLegend(d);
   buildResults(d);
 }
-
-function resetView() {
-  const c = state.center, R = state.radius || 1;
-  camera.position.set(c.x + 0.4 * R, c.y - 2.2 * R, c.z + 1.4 * R);
-  camera.near = R / 1000; camera.far = R * 100; camera.updateProjectionMatrix();
-  controls.target.copy(c); controls.update();
+function makeSurfaceMaterial() {
+  const o = parseFloat($('opacity').value), shading = $('shading').value;
+  // constant depth offset only: a slope term would push silhouettes back and reveal glyphs behind the wall
+  const common = { side: THREE.DoubleSide, transparent: o < 0.995, opacity: o, depthWrite: o > 0.5, polygonOffset: true, polygonOffsetFactor: 0.0, polygonOffsetUnits: 1.0 };
+  if (shading === 'unlit') return patchSurface(new THREE.MeshBasicMaterial(common));
+  if (shading === 'sheen') return patchSurface(new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.8, metalness: 0 }, common)));
+  return patchSurface(new THREE.MeshLambertMaterial(common));          // pure diffuse: no specular highlight can masquerade as data
 }
-$('reset_view').onclick = resetView;
+function applyShading() { if (!state.surface) return; state.surface.material.dispose(); state.surface.material = makeSurfaceMaterial(); invalidate(); }
 
+// evenly spaced streamlines of the direction field: one LineSegments2, under the manifolds
+function buildStreamlines(d) {
+  dispose(state.streamlines); state.streamlines = null;
+  if (!d.streamlines || !d.streamlines.length) return;
+  const lift = 0.5 * parseFloat($('lift').value) * d.mean_edge_length;
+  let n = 0; for (const sl of d.streamlines) n += Math.max(sl.points.length / 3 - 1, 0);
+  const segs = new Float32Array(6 * n);
+  let o = 0;
+  for (const sl of d.streamlines) {
+    const p = liftedPositions(sl.points, sl.triangles, d, lift), m = p.length / 3;
+    for (let i = 0; i < m - 1; i++) { segs.set(p.subarray(3 * i, 3 * i + 6), o); o += 6; }
+  }
+  const g = new LineSegmentsGeometry(); g.setPositions(segs);
+  const mat = lineMaterial({ color: new THREE.Color(inkColor()), linewidth: parseFloat($('sl_width').value), transparent: true, opacity: parseFloat($('sl_opacity').value), depthWrite: false });
+  mat.userData.streamline = true;
+  state.streamlines = new LineSegments2(g, mat); state.streamlines.renderOrder = 0.5; state.streamlines.layers.set(LINE_LAYER);
+  state.streamlines.visible = $('show_sl').checked;
+  root.add(state.streamlines);
+}
+
+// arrow glyphs on an evenly spaced subset of the vertices (greedy minimum-distance sampling over a scrambled vertex order)
+let arrowGeom = null;
+function buildGlyphs(d) {
+  dispose(state.glyphs); state.glyphs = null;
+  const spacing = parseFloat($('glyph_spacing').value) * d.mean_edge_length, size = parseFloat($('glyph_size').value) * d.mean_edge_length;
+  const N = d.n_points, P = d.points, V = d.vectors, NV = d.vertex_normals, c = c0();
+  const order = new Uint32Array(N); for (let i = 0; i < N; i++) order[i] = i;
+  order.sort((a, b) => ((a * 0.6180339887498949) % 1) - ((b * 0.6180339887498949) % 1));
+  const cell = spacing, grid = new Map(), chosen = [];
+  const cellKey = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
+  for (let k = 0; k < N && chosen.length < 20000; k++) {
+    const i = order[k], x = P[3 * i], y = P[3 * i + 1], z = P[3 * i + 2];
+    if (!(Math.hypot(V[3 * i], V[3 * i + 1], V[3 * i + 2]) > 0)) continue;
+    const cx = Math.floor(x / cell), cy = Math.floor(y / cell), cz = Math.floor(z / cell);
+    let ok = true;
+    outer: for (let a = cx - 1; a <= cx + 1; a++) for (let b = cy - 1; b <= cy + 1; b++) for (let e = cz - 1; e <= cz + 1; e++) {
+      const list = grid.get(`${a},${b},${e}`); if (!list) continue;
+      for (const j of list) { const dx = P[3 * j] - x, dy = P[3 * j + 1] - y, dz = P[3 * j + 2] - z; if (dx * dx + dy * dy + dz * dz < cell * cell) { ok = false; break outer; } }
+    }
+    if (!ok) continue;
+    const kk = cellKey(x, y, z); let list = grid.get(kk); if (!list) { list = []; grid.set(kk, list); } list.push(i); chosen.push(i);
+  }
+  if (!arrowGeom) {
+    const cone = new THREE.ConeGeometry(0.16, 0.4, 10); cone.translate(0, 0.8, 0);
+    const shaft = new THREE.CylinderGeometry(0.045, 0.045, 0.6, 8); shaft.translate(0, 0.3, 0);
+    arrowGeom = BufferGeometryUtils.mergeGeometries([cone, shaft]);
+  }
+  const mesh = new THREE.InstancedMesh(arrowGeom, new THREE.MeshLambertMaterial({ color: new THREE.Color(inkColor()) }), chosen.length);
+  const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), p = new THREE.Vector3(), s = new THREE.Vector3();
+  let vmax = 0; for (const i of chosen) vmax = Math.max(vmax, Math.hypot(V[3 * i], V[3 * i + 1], V[3 * i + 2]));
+  chosen.forEach((i, k) => {
+    dir.set(V[3 * i], V[3 * i + 1], V[3 * i + 2]); const mag = dir.length(); dir.normalize();
+    const L = size * (0.45 + 0.55 * Math.min(mag / (vmax || 1), 1)), lift = 0.12 * d.mean_edge_length;
+    p.set(P[3 * i] + lift * NV[3 * i] - c.x, P[3 * i + 1] + lift * NV[3 * i + 1] - c.y, P[3 * i + 2] + lift * NV[3 * i + 2] - c.z);
+    q.setFromUnitVectors(up, dir); s.set(L, L, L);
+    mtx.compose(p, q, s); mesh.setMatrixAt(k, mtx);
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.visible = $('show_glyphs').checked;
+  mesh.renderOrder = 2;
+  state.glyphs = mesh; root.add(mesh);
+}
+
+// fixed points: shape = class (saddle octahedron, source-like cube, sink-like sphere; foci carry a flat ring), colour = palette; inverted-hull outline; pixel-size floor
+let shapeGeoms = null;
+function buildFixedPoints(d) {
+  dispose(state.fpGroup); state.fpGroup = null; state.fpMeshes = []; state.markers = [];
+  for (const l of state.labels) l.removeFromParent(); state.labels = [];
+  const fps = d.fixed_points; if (!fps.length) { dispose(state.eig); state.eig = null; return; }
+  if (!shapeGeoms) shapeGeoms = { sink: new THREE.SphereGeometry(1, 28, 20), saddle: new THREE.OctahedronGeometry(1.25, 0), source: new THREE.BoxGeometry(1.5, 1.5, 1.5),
+    ring: new THREE.TorusGeometry(1.7, 0.14, 10, 40), ringOutline: new THREE.TorusGeometry(1.7, 0.22, 10, 40) };
+  const group = new THREE.Group(), c = c0();
+  const nrm = new THREE.Vector3(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), zAxis = new THREE.Vector3(0, 0, 1);
+  const outlineColor = new THREE.Color(haloColor());
+  for (const shape of ['sink', 'saddle', 'source', 'ring']) {
+    const list = shape === 'ring' ? fps.filter(fp => IS_FOCUS[fp.type]) : fps.filter(fp => SHAPE_OF_TYPE[fp.type] === shape);
+    if (!list.length) continue;
+    const mesh = new THREE.InstancedMesh(shapeGeoms[shape], new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0 }), list.length);
+    const outline = new THREE.InstancedMesh(shape === 'ring' ? shapeGeoms.ringOutline : shapeGeoms[shape], new THREE.MeshBasicMaterial({ color: outlineColor, side: THREE.BackSide }), list.length);
+    outline.userData.outline = true;
+    list.forEach((fp, k) => {
+      triNormal(d, fp.triangle, nrm);
+      if (shape === 'ring') q.setFromUnitVectors(zAxis, nrm); else q.setFromUnitVectors(up, nrm);
+      state.markers.push({ mesh, outline, index: k, fp, pos: new THREE.Vector3(fp.position[0] - c.x, fp.position[1] - c.y, fp.position[2] - c.z), n: nrm.clone(), q: q.clone(), ring: shape === 'ring' });
+      mesh.setColorAt(k, new THREE.Color(markerColor(fp.type)));
+    });
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.userData.fps = list; mesh.renderOrder = 4; outline.renderOrder = 3;
+    group.add(outline, mesh); state.fpMeshes.push(mesh);
+  }
+  fps.forEach(fp => {
+    triNormal(d, fp.triangle, nrm);
+    const el = document.createElement('div'); el.className = 'label'; el.textContent = `${fp.id} ${fp.type_name}`;
+    const lab = new CSS2DObject(el); lab.center.set(0, 1); lab.position.set(fp.position[0] - c.x + 2 * nrm.x * d.mean_edge_length, fp.position[1] - c.y + 2 * nrm.y * d.mean_edge_length, fp.position[2] - c.z + 2 * nrm.z * d.mean_edge_length);
+    lab.visible = labelsVisible(); group.add(lab); state.labels.push(lab);
+  });
+  group.visible = $('show_fp').checked;
+  state.fpGroup = group; root.add(group);
+  state.markerRadius = 0; updateMarkerScale(true);
+  // saddle eigenvectors: outgoing (unstable) and incoming (stable) directions as fat segments with a displaced halo
+  dispose(state.eig); state.eig = null;
+  const pm = manifoldColors(), r = state.markerRadius, segs = [], hsegs = [], cols = [], Le = 3 * d.mean_edge_length, lift = 0.6 * r;
+  for (const fp of fps) {
+    if (fp.type !== 3 || !fp.eigvec_out) continue;
+    triNormal(d, fp.triangle, nrm);
+    const base = [fp.position[0] - c.x + lift * nrm.x, fp.position[1] - c.y + lift * nrm.y, fp.position[2] - c.z + lift * nrm.z];
+    for (const [vec, col] of [[fp.eigvec_out, pm[0]], [fp.eigvec_in, pm[1]]]) {
+      const cc = new THREE.Color(col);
+      for (const sgn of [-1, 1]) {
+        const a = base, b = [base[0] + sgn * Le * vec[0], base[1] + sgn * Le * vec[1], base[2] + sgn * Le * vec[2]];
+        segs.push(a[0], a[1], a[2], b[0], b[1], b[2]);
+        for (const e of [a, b]) hsegs.push(e[0] - 0.35 * r * nrm.x, e[1] - 0.35 * r * nrm.y, e[2] - 0.35 * r * nrm.z);
+        cols.push(cc.r, cc.g, cc.b, cc.r, cc.g, cc.b);
+      }
+    }
+  }
+  if (segs.length) {
+    const g = new LineSegmentsGeometry(); g.setPositions(segs); g.setColors(cols);
+    const halo = parseFloat($('halo').value), lw = Math.max(1.5, parseFloat($('linewidth').value) * 0.7);
+    const grp = new THREE.Group();
+    if (halo > 0) {
+      const hg = new LineSegmentsGeometry(); hg.setPositions(hsegs);
+      const hm = lineMaterial({ color: outlineColor.clone(), linewidth: lw + 2 * halo, alphaToCoverage: true, polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: 4 }); hm.userData.halo = true; hm.userData.eig = true;
+      const hl = new LineSegments2(hg, hm); hl.renderOrder = 1; hl.layers.set(LINE_LAYER); grp.add(hl);
+    }
+    const m = lineMaterial({ vertexColors: true, linewidth: lw, alphaToCoverage: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -8 }); m.userData.stroke = true; m.userData.eig = true;
+    const ls = new LineSegments2(g, m); ls.renderOrder = 2; ls.layers.set(LINE_LAYER); grp.add(ls);
+    grp.visible = $('show_eig').checked; state.eig = grp; root.add(grp);
+  }
+}
+/** marker radius: slider × mean edge, but never below ~10 px on screen */
+function updateMarkerScale(force = false) {
+  if (!state.markers.length) return;
+  const dist = camera.position.distanceTo(controls.target);
+  const wpp = camera.isPerspectiveCamera ? 2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / (canvas.clientHeight || 600) : (camera.top - camera.bottom) / camera.zoom / (canvas.clientHeight || 600);
+  const r = Math.max(parseFloat($('pointsize').value) * state.meanEdge, 5 * wpp);
+  if (!force && Math.abs(r - state.markerRadius) < 0.03 * r) return;
+  state.markerRadius = r;
+  const mtx = new THREE.Matrix4(), s = new THREE.Vector3(), p = new THREE.Vector3();
+  for (const m of state.markers) {
+    const lift = m.ring ? 0.4 * r : 0.55 * r, k = m.ring ? 1 : 1.14;
+    p.copy(m.pos).addScaledVector(m.n, lift);
+    mtx.compose(p, m.q, s.set(r, r, r)); m.mesh.setMatrixAt(m.index, mtx);
+    mtx.compose(p, m.q, s.set(r * k, r * k, r * k)); m.outline.setMatrixAt(m.index, mtx);
+    m.mesh.instanceMatrix.needsUpdate = true; m.outline.instanceMatrix.needsUpdate = true;
+  }
+  invalidate();
+}
+
+function buildManifolds(d) {
+  dispose(state.unstable); dispose(state.stable);
+  state.unstable = new THREE.Group(); state.stable = new THREE.Group();
+  const lw = parseFloat($('linewidth').value), halo = parseFloat($('halo').value), lift = parseFloat($('lift').value) * d.mean_edge_length, pm = manifoldColors();
+  const tubes = $('curve_style').value === 'tubes', ghost = $('ghost').checked, h = d.mean_edge_length;
+  for (const br of d.branches) {
+    if (br.points.length < 6) continue;
+    const target = br.kind === 0 ? state.unstable : state.stable;
+    if (tubes) {
+      const radius = Math.max(0.12 * lw, 0.15) * h * 0.6;
+      const p = branchDisplay(br, d, Math.max(lift, radius));
+      const pts = []; for (let i = 0; i < p.length; i += 3) pts.push(new THREE.Vector3(p[i], p[i + 1], p[i + 2]));
+      if (pts.length < 2) continue;
+      const path = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+      const tg = new THREE.TubeGeometry(path, Math.min(pts.length * 2, 4000), radius, 10, false);
+      const mesh = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ color: new THREE.Color(pm[br.kind]), roughness: 0.55, metalness: 0 }));
+      mesh.renderOrder = 2; mesh.userData.branch = br; mesh.layers.set(LINE_LAYER); target.add(mesh);
+    } else {
+      const grp = curve(branchDisplay(br, d, lift), branchDisplay(br, d, 0.55 * lift), pm[br.kind], lw, halo, h, ghost);
+      grp.userData.main.userData.branch = br; target.add(grp);
+    }
+  }
+  state.unstable.visible = $('show_unstable').checked; state.stable.visible = $('show_stable').checked;
+  root.add(state.unstable, state.stable);
+  invalidate();
+}
+
+// ---- camera ---------------------------------------------------------------------------------
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function fitView(dirVec = new THREE.Vector3(0.35, -1, 0.65), up = new THREE.Vector3(0, 0, 1), fly = false) {
+  const R = state.radius || 1, fov = THREE.MathUtils.degToRad(35), aspect = (canvas.clientWidth || 800) / (canvas.clientHeight || 600);
+  const fovMin = Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * aspect));
+  const dist = R / Math.sin(fovMin / 2) * 1.08;
+  const target = root.position.clone(), pos = target.clone().addScaledVector(dirVec.clone().normalize(), dist);
+  if (!camera.up.equals(up)) { camera.up.copy(up); makeControls(); }
+  if (!camera.isPerspectiveCamera) { const half = R * 1.12; camera.left = -half * aspect; camera.right = half * aspect; camera.top = half; camera.bottom = -half; camera.zoom = 1; camera.updateProjectionMatrix(); }
+  flyTo(target, pos, fly);
+}
+const VIEWS = { '+x': [[1, 0, 0], [0, 0, 1]], '-x': [[-1, 0, 0], [0, 0, 1]], '+y': [[0, 1, 0], [0, 0, 1]], '-y': [[0, -1, 0], [0, 0, 1]], '+z': [[0, 0, 1], [0, 1, 0]], '-z': [[0, 0, -1], [0, 1, 0]] };
+$('viewbar').querySelectorAll('button[data-view]').forEach(b => b.onclick = () => {
+  const v = b.dataset.view;
+  if (v === 'fit') fitView(undefined, undefined, true); else fitView(new THREE.Vector3(...VIEWS[v][0]), new THREE.Vector3(...VIEWS[v][1]), true);
+});
+$('ortho').onclick = () => setupCamera(!state.ortho);
+$('reset_view').onclick = () => fitView(undefined, undefined, true);
+function flyTo(target, pos, fly = true, ms = 450) {
+  if (!fly || reducedMotion) { state.flight = null; controls.enabled = true; camera.position.copy(pos); controls.target.copy(target); controls.update(); invalidate(); return; }
+  state.flight = { t0: null, ms, p0: camera.position.clone(), p1: pos.clone(), c0: controls.target.clone(), c1: target.clone() };
+  controls.enabled = false;
+}
+function stepFlight(ts) {
+  const f = state.flight; if (f.t0 === null) f.t0 = ts;
+  const u = Math.min((ts - f.t0) / f.ms, 1), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+  controls.target.lerpVectors(f.c0, f.c1, e);
+  // the camera offset is interpolated in direction and log-distance so that zooms feel uniform
+  const o0 = f.p0.clone().sub(f.c0), o1 = f.p1.clone().sub(f.c1), d0 = Math.max(o0.length(), 1e-9), d1 = Math.max(o1.length(), 1e-9);
+  const dir = o0.normalize().lerp(o1.normalize(), e).normalize(), dist = Math.exp(THREE.MathUtils.lerp(Math.log(d0), Math.log(d1), e));
+  camera.position.copy(controls.target).addScaledVector(dir, dist);
+  camera.lookAt(controls.target);
+  if (u >= 1) { state.flight = null; controls.enabled = true; controls.update(); }
+  return true;
+}
+/** camera outside the wall, looking at the fixed point along (mostly) the outward normal */
+function focusOn(fp, dist = 40, fly = true) {
+  const d = state.result, c = c0();
+  const p = new THREE.Vector3(fp.position[0] - c.x, fp.position[1] - c.y, fp.position[2] - c.z).add(root.position);
+  const n = new THREE.Vector3(d.tri_normals[3 * fp.triangle], d.tri_normals[3 * fp.triangle + 1], d.tri_normals[3 * fp.triangle + 2]);
+  const view = camera.position.clone().sub(controls.target).normalize();
+  const dir = n.multiplyScalar(0.8).add(view.multiplyScalar(0.2)).normalize();
+  flyTo(p, p.clone().addScaledVector(dir, dist * state.meanEdge), fly);
+}
+window.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  if (e.key === 'f' || e.key === 'F') fitView(undefined, undefined, true);
+  if (e.key === 'o' || e.key === 'O') setupCamera(!state.ortho);
+  if (e.key === 'Escape') selectFixedPoint(-1);
+});
+
+// ---- picking ---------------------------------------------------------------------------------
+const raycaster = new THREE.Raycaster(); raycaster.params.Line2 = { threshold: 5 }; raycaster.layers.enableAll();
+const pointer = new THREE.Vector2(), tooltip = $('tooltip');
+const fmt = (x, n = 3) => Number.isFinite(x) ? x.toPrecision(n) : '–';
+const fmtEig = e => e[1] === 0 ? fmt(e[0]) : `${fmt(e[0])}${e[1] >= 0 ? '+' : '−'}${fmt(Math.abs(e[1]))}i`;
+function pick(ev) {
+  if (!state.result) return null;
+  const rect = canvas.getBoundingClientRect();
+  pointer.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  // an opaque wall hides what lies behind it: hits farther than the first wall hit are ignored
+  const wall = state.surface && state.surface.visible && state.surface.material.opacity > 0.995 ? raycaster.intersectObject(state.surface, false)[0] : null;
+  const accept = hit => !wall || hit.distance <= wall.distance + 2 * state.meanEdge;
+  if (state.fpGroup && state.fpGroup.visible) {
+    const hit = raycaster.intersectObjects(state.fpMeshes, false).find(accept);
+    if (hit) return { kind: 'fp', fp: hit.object.userData.fps[hit.instanceId], mesh: hit.object, index: hit.instanceId };
+  }
+  const lines = [];
+  for (const grp of [state.unstable, state.stable]) if (grp && grp.visible) grp.traverse(o => { if (o.userData.branch) lines.push(o); });
+  if (lines.length) {
+    const hit = raycaster.intersectObjects(lines, false).find(accept);
+    if (hit) return { kind: 'branch', branch: hit.object.userData.branch, object: hit.object };
+  }
+  return null;
+}
+/** hit test on the orientation gizmo (same mapping as ViewHelper.handleClick), so that the page's own flight and up-vector handling do the alignment */
+const GIZMO_AXIS = { posX: '+x', negX: '-x', posY: '+y', negY: '-y', posZ: '+z', negZ: '-z' };
+function gizmoHit(ev) {
+  if (!viewHelper) return null;
+  const rect = canvas.getBoundingClientRect(), dim = 128;
+  const ox = rect.left + (canvas.offsetWidth - dim), oy = rect.top + (canvas.offsetHeight - dim);
+  if (ev.clientX < ox || ev.clientY < oy) return null;
+  const m = new THREE.Vector2(((ev.clientX - ox) / (rect.right - ox)) * 2 - 1, -((ev.clientY - oy) / (rect.bottom - oy)) * 2 + 1);
+  const cam = new THREE.OrthographicCamera(-2, 2, 2, -2, 0, 4); cam.position.set(0, 0, 2); cam.updateMatrixWorld();
+  const rc = new THREE.Raycaster(); rc.setFromCamera(m, cam);
+  const hit = rc.intersectObjects(viewHelper.children.filter(c => c.isSprite), false)[0];
+  return hit ? (GIZMO_AXIS[hit.object.userData.type] || null) : null;
+}
+function markerOf(id) { return state.markers.find(m => m.fp.id === id && !m.ring); }
+function setHighlight(id, on) {
+  const m = markerOf(id); if (!m) return;
+  m.mesh.setColorAt(m.index, new THREE.Color(on ? (isDark() ? '#ffe066' : '#ff8c00') : markerColor(m.fp.type)));
+  m.mesh.instanceColor.needsUpdate = true; invalidate();
+}
+function branchObject(br) { let obj = null; for (const g of [state.unstable, state.stable]) g && g.traverse(o => { if (o.userData.branch === br) obj = o; }); return obj; }
+function highlightBranch(obj, on) {
+  if (!obj || !obj.material) return;
+  if (obj.material.isLineMaterial) obj.material.linewidth = parseFloat($('linewidth').value) * (on ? 1.8 : 1);
+  else if (obj.material.emissive) obj.material.emissive.set(on ? 0x404040 : 0x000000);
+  invalidate();
+}
+function rowHighlight(selector) {
+  document.querySelectorAll('tr.hl').forEach(tr => tr.classList.remove('hl'));
+  if (selector) { const tr = document.querySelector(selector); if (tr) tr.classList.add('hl'); }
+}
+let hover = null;
+canvas.addEventListener('pointermove', ev => {
+  if (state.flight) return;
+  const hit = pick(ev);
+  if (hover && hover.kind === 'fp' && !(hit && hit.kind === 'fp' && hit.fp.id === hover.fp.id) && hover.fp.id !== state.selected) setHighlight(hover.fp.id, false);
+  if (hover && hover.kind === 'branch' && !(hit && hit.kind === 'branch' && hit.object === hover.object)) highlightBranch(hover.object, false);
+  hover = hit;
+  if (!hit) { tooltip.style.display = 'none'; canvas.style.cursor = ''; rowHighlight(null); return; }
+  canvas.style.cursor = 'pointer';
+  if (hit.kind === 'fp') {
+    setHighlight(hit.fp.id, true);
+    const fp = hit.fp;
+    tooltip.innerHTML = `<b>fixed point ${fp.id}: ${fp.type_name}</b><br><span class="mono">Poincaré index ${fp.index} · triangle ${fp.triangle}<br>(${fp.position.map(x => fmt(x, 4)).join(', ')})<br>λ₁ = ${fmtEig(fp.eigenvalues[0])}, λ₂ = ${fmtEig(fp.eigenvalues[1])}</span>`;
+    rowHighlight(`#fptable tr[data-id="${fp.id}"]`);
+  } else {
+    const br = hit.branch; highlightBranch(hit.object, true);
+    tooltip.innerHTML = `<b>${br.kind_name} manifold of saddle ${br.saddle}</b> (${br.sign > 0 ? '+' : '−'} branch)<br><span class="mono">length ${fmt(br.length, 4)} · ${br.end_reason}</span>`;
+    rowHighlight(`#brtable tr[data-br="${state.result.branches.indexOf(br)}"]`);
+  }
+  tooltip.style.display = 'block';
+  const rect = canvas.getBoundingClientRect();
+  tooltip.style.left = (ev.clientX - rect.left + 14) + 'px'; tooltip.style.top = (ev.clientY - rect.top + 14) + 'px';
+});
+canvas.addEventListener('pointerleave', () => { tooltip.style.display = 'none'; rowHighlight(null); if (hover && hover.kind === 'branch') highlightBranch(hover.object, false); if (hover && hover.kind === 'fp' && hover.fp.id !== state.selected) setHighlight(hover.fp.id, false); hover = null; });
+canvas.addEventListener('click', ev => {
+  const axis = gizmoHit(ev);
+  if (axis) { fitView(new THREE.Vector3(...VIEWS[axis][0]), new THREE.Vector3(...VIEWS[axis][1]), true); return; }   // click on the orientation gizmo: align the view
+  const hit = pick(ev); if (hit && hit.kind === 'fp') selectFixedPoint(hit.fp.id);
+});
+canvas.addEventListener('dblclick', ev => { const hit = pick(ev); if (hit && hit.kind === 'fp') focusOn(hit.fp); });
+function selectFixedPoint(id) {
+  if (state.selected >= 0) setHighlight(state.selected, false);
+  state.selected = id;
+  if (id >= 0) setHighlight(id, true);
+  document.querySelectorAll('#fptable tr.fp').forEach(tr => { const sel = parseInt(tr.dataset.id, 10) === id; tr.classList.toggle('sel', sel); if (sel) tr.scrollIntoView({ block: 'nearest' }); });
+}
+
+// ---- legend, tables ---------------------------------------------------------------------------
 function buildLegend(d) {
-  const present = new Set(d.fixed_points.map(f => f.type));
-  const items = [];
-  for (const t of [3, 1, 2, 6, 7, 4, 0]) if (present.has(t) || t === 3 || t === 1 || t === 2)
-    items.push(`<span class="legend-item"><span class="swatch" style="background:${TYPE_COLORS[t]}"></span>${TYPE_NAMES[t]}</span>`);
-  items.push(`<span class="legend-item"><span class="line" style="background:${MANIFOLD_COLORS[0]}"></span>unstable manifold (forward)</span>`);
-  items.push(`<span class="legend-item"><span class="line" style="background:${MANIFOLD_COLORS[1]}"></span>stable manifold (backward)</span>`);
+  const pm = manifoldColors(), present = new Set(d.fixed_points.map(f => f.type)), items = [];
+  const shapeClass = t => SHAPE_OF_TYPE[t] === 'saddle' ? 'diamond' : (SHAPE_OF_TYPE[t] === 'source' ? 'square' : '');
+  for (const t of [3, 2, 6, 1, 7, 4, 0]) if (present.has(t) || t === 3 || t === 1 || t === 2)
+    items.push(`<span class="legend-item"><span class="swatch ${shapeClass(t)}" style="background:${markerColor(t)}"></span>${TYPE_NAMES[t]}${IS_FOCUS[t] ? ' (ring)' : ''}</span>`);
+  items.push(`<span class="legend-item"><span class="line" style="background:${pm[0]}"></span>unstable manifold (forward, attracting LCS)</span>`);
+  items.push(`<span class="legend-item"><span class="line" style="background:${pm[1]}"></span>stable manifold (backward, repelling LCS)</span>`);
+  if ($('ghost').checked && $('curve_style').value === 'lines') items.push(`<span class="legend-item"><span class="line" style="background:repeating-linear-gradient(90deg,${pm[0]} 0 4px,transparent 4px 7px);box-shadow:none"></span>dashed = hidden behind the wall</span>`);
+  if (d.streamlines && d.streamlines.length) items.push(`<span class="legend-item"><span class="line" style="background:${inkColor()};height:1px;box-shadow:none"></span>streamlines of the WSS direction (${d.streamlines.length})</span>`);
+  items.push(`<span class="legend-item note" style="margin:0">shape: saddle ◆, source-like ■, sink-like ●, ring = focus${$('palette').value === 'stability' ? `; hue: blue attracting, red repelling, ${isDark() ? 'white' : 'black'} saddle` : ''}</span>`);
   $('legend-items').innerHTML = items.join('');
 }
 buildLegend({ fixed_points: [] });
-
-const fmt = (x, n = 3) => Number.isFinite(x) ? x.toPrecision(n) : '–';
-const fmtEig = e => e[1] === 0 ? fmt(e[0]) : `${fmt(e[0])}${e[1] >= 0 ? '+' : '−'}${fmt(Math.abs(e[1]))}i`;
-
 function buildResults(d) {
   $('results').hidden = false;
-  const nS = d.fixed_points.filter(f => f.type === 3).length;
-  const t = d.timings;
+  const nS = d.fixed_points.filter(f => f.type === 3).length, t = d.timings, pm = manifoldColors();
   $('summary').innerHTML = `<b>${state.fileName}</b>: ${d.n_points} points, ${d.n_triangles} triangles, array <b>${d.vector_name}</b> (scale ${d.scale}).<br>` +
-    `${d.fixed_points.length} fixed points (${nS} saddles), sum of Poincaré indices ${d.poincare_index_sum}, ${d.branches.length} manifold branches. ` +
-    `Computed in ${((t.mesh_and_field + t.fixed_points + t.manifolds) / 1000).toFixed(2)} s.` +
-    (d.warnings.length ? `<br>Warnings: ${d.warnings.join('; ')}` : '');
+    `${d.fixed_points.length} fixed points (${nS} saddles), sum of Poincaré indices ${d.poincare_index_sum}, ${d.branches.length} manifold branches, ${d.streamlines.length} streamlines. ` +
+    `Computed in ${((t.mesh_and_field + t.fixed_points + t.manifolds + (t.streamlines || 0)) / 1000).toFixed(2)} s.` + (d.warnings.length ? `<br>Warnings: ${d.warnings.join('; ')}` : '');
   const tb = $('fptable').querySelector('tbody');
   tb.innerHTML = d.fixed_points.map(fp => `<tr class="fp" data-id="${fp.id}"><td>${fp.id}</td>` +
-    `<td><span class="swatch" style="background:${TYPE_COLORS[fp.type]}"></span>${fp.type_name}</td><td>${fp.index}</td>` +
+    `<td><span class="swatch ${SHAPE_OF_TYPE[fp.type] === 'saddle' ? 'diamond' : (SHAPE_OF_TYPE[fp.type] === 'source' ? 'square' : '')}" style="background:${markerColor(fp.type)}"></span>${fp.type_name}</td><td>${fp.index}</td>` +
     `<td class="num">${fmt(fp.position[0], 4)}</td><td class="num">${fmt(fp.position[1], 4)}</td><td class="num">${fmt(fp.position[2], 4)}</td>` +
     `<td class="num">${fmtEig(fp.eigenvalues[0])}</td><td class="num">${fmtEig(fp.eigenvalues[1])}</td></tr>`).join('');
-  tb.querySelectorAll('tr.fp').forEach(tr => tr.onclick = () => {
-    const fp = d.fixed_points[parseInt(tr.dataset.id, 10)];
-    const p = new THREE.Vector3(...fp.position);
-    const dir = camera.position.clone().sub(controls.target).normalize();
-    controls.target.copy(p);
-    camera.position.copy(p).add(dir.multiplyScalar(12 * state.meanEdge));
-    controls.update();
+  tb.querySelectorAll('tr.fp').forEach(tr => {
+    const fp = d.fixed_points.find(f => f.id === parseInt(tr.dataset.id, 10));
+    tr.onclick = () => selectFixedPoint(fp.id); tr.ondblclick = () => focusOn(fp);
+    tr.onpointerenter = () => setHighlight(fp.id, true); tr.onpointerleave = () => { if (fp.id !== state.selected) setHighlight(fp.id, false); };
   });
-  $('brtable').querySelector('tbody').innerHTML = d.branches.map(br => `<tr><td>${br.saddle}</td>` +
-    `<td><span class="line" style="background:${MANIFOLD_COLORS[br.kind]}"></span>${br.kind_name}</td><td>${br.sign > 0 ? '+' : '−'}</td>` +
+  const bt = $('brtable').querySelector('tbody');
+  bt.innerHTML = d.branches.map((br, i) => `<tr class="br" data-br="${i}"><td>${br.saddle}</td>` +
+    `<td><span class="line" style="background:${pm[br.kind]}"></span>${br.kind_name}</td><td>${br.sign > 0 ? '+' : '−'}</td>` +
     `<td class="num">${fmt(br.length, 4)}</td><td>${br.end_reason}</td></tr>`).join('');
+  bt.querySelectorAll('tr.br').forEach(tr => {
+    const br = d.branches[parseInt(tr.dataset.br, 10)];
+    tr.onpointerenter = () => highlightBranch(branchObject(br), true); tr.onpointerleave = () => highlightBranch(branchObject(br), false);
+    tr.onclick = () => { const fp = d.fixed_points.find(f => f.id === br.saddle); if (fp) focusOn(fp, 60); };
+  });
   $('details').textContent = `mesh: ${d.n_points} points, ${d.n_triangles} triangles, ${d.n_edges} edges, ${d.n_boundary_edges} boundary edges, mean edge length ${fmt(d.mean_edge_length, 4)}\n` +
-    `timings (ms): mesh+field ${t.mesh_and_field.toFixed(0)}, fixed points ${t.fixed_points.toFixed(0)}, manifolds ${t.manifolds.toFixed(0)}`;
+    `timings (ms): mesh+field ${t.mesh_and_field.toFixed(0)}, fixed points ${t.fixed_points.toFixed(0)}, manifolds ${t.manifolds.toFixed(0)}, streamlines ${(t.streamlines || 0).toFixed(0)}`;
 }
 
-// ---- display toggles -----------------------------------------------------------
-$('show_surface').onchange = e => { if (state.surface) state.surface.visible = e.target.checked; };
-$('opacity').oninput = e => { if (state.surface) state.surface.material.opacity = parseFloat(e.target.value); };
-$('show_wire').onchange = e => { if (state.wire) state.wire.visible = e.target.checked; };
-$('show_glyphs').onchange = e => { if (state.glyphs) state.glyphs.visible = e.target.checked; };
-$('show_fp').onchange = e => { if (state.fp) state.fp.visible = e.target.checked; };
-$('show_eig').onchange = e => { if (state.eig) state.eig.visible = e.target.checked; };
-$('show_unstable').onchange = e => { if (state.unstable) state.unstable.visible = e.target.checked; };
-$('show_stable').onchange = e => { if (state.stable) state.stable.visible = e.target.checked; };
-$('linewidth').oninput = e => { for (const m of state.lineMaterials) m.linewidth = parseFloat(e.target.value); };
-$('pointsize').oninput = e => {
-  if (!state.fp || !state.result) return;
-  const r = parseFloat(e.target.value) * state.meanEdge, mtx = new THREE.Matrix4();
-  state.result.fixed_points.forEach((fp, i) => { mtx.makeScale(r, r, r).setPosition(fp.position[0], fp.position[1], fp.position[2]); state.fp.setMatrixAt(i, mtx); });
-  state.fp.instanceMatrix.needsUpdate = true;
+// ---- display controls ----------------------------------------------------------------------------
+const rebuildTopology = () => { if (state.result) { buildFixedPoints(state.result); buildManifolds(state.result); buildLegend(state.result); buildResults(state.result); if (state.selected >= 0) selectFixedPoint(state.selected); invalidate(); } };
+$('show_surface').onchange = e => { if (state.surface) state.surface.visible = e.target.checked; invalidate(); };
+$('opacity').oninput = e => { if (state.surface) { const o = parseFloat(e.target.value), m = state.surface.material; m.opacity = o; m.transparent = o < 0.995; m.depthWrite = o > 0.5; m.needsUpdate = true; } invalidate(); };
+$('show_wire').onchange = e => { if (state.wire) state.wire.visible = e.target.checked; invalidate(); };
+$('shading').onchange = applyShading;
+$('ao').onchange = e => { gtao.enabled = e.target.checked; invalidate(); };
+$('fog').onchange = invalidate;
+for (const id of ['color_by', 'cmap', 'log_scale', 'auto_range', 'units']) $(id).onchange = updateRange;
+for (const id of ['range_min', 'range_max']) $(id).onchange = () => { $('auto_range').checked = false; updateRange(); };
+$('show_sl').onchange = e => { if (state.streamlines) state.streamlines.visible = e.target.checked; invalidate(); };
+$('sl_width').oninput = e => { if (state.streamlines) state.streamlines.material.linewidth = parseFloat(e.target.value); invalidate(); };
+$('sl_opacity').oninput = e => { if (state.streamlines) state.streamlines.material.opacity = parseFloat(e.target.value); invalidate(); };
+$('show_glyphs').onchange = e => { if (state.glyphs) state.glyphs.visible = e.target.checked; invalidate(); };
+$('glyph_spacing').onchange = () => state.result && buildGlyphs(state.result);
+$('glyph_size').onchange = () => state.result && buildGlyphs(state.result);
+$('show_fp').onchange = e => { if (state.fpGroup) state.fpGroup.visible = e.target.checked; for (const l of state.labels) l.visible = labelsVisible(); invalidate(); };
+$('palette').onchange = rebuildTopology;
+$('show_labels').onchange = () => { for (const l of state.labels) l.visible = labelsVisible(); invalidate(); };
+$('pointsize').oninput = () => updateMarkerScale(true);
+$('show_eig').onchange = e => { if (state.eig) state.eig.visible = e.target.checked; invalidate(); };
+$('show_unstable').onchange = e => { if (state.unstable) state.unstable.visible = e.target.checked; invalidate(); };
+$('show_stable').onchange = e => { if (state.stable) state.stable.visible = e.target.checked; invalidate(); };
+$('ghost').onchange = () => { if (state.result) { buildManifolds(state.result); buildLegend(state.result); } };
+$('curve_style').onchange = () => { if (state.result) { buildManifolds(state.result); buildLegend(state.result); } };
+$('linewidth').oninput = e => { const lw = parseFloat(e.target.value), halo = parseFloat($('halo').value); for (const m of state.lineMaterials) { const f = m.userData.eig ? 0.7 : 1; if (m.userData.halo) m.linewidth = Math.max(1.5, lw * f) + 2 * halo; else if (m.userData.stroke) m.linewidth = Math.max(1.5, lw * f); else if (m.userData.ghost) m.linewidth = Math.max(1, 0.8 * lw); } invalidate(); };
+$('halo').oninput = e => { const lw = parseFloat($('linewidth').value), halo = parseFloat(e.target.value); for (const m of state.lineMaterials) if (m.userData.halo) m.linewidth = Math.max(1.5, lw * (m.userData.eig ? 0.7 : 1)) + 2 * halo; invalidate(); };
+$('lift').onchange = () => { if (state.result) { buildManifolds(state.result); buildStreamlines(state.result); } };
+$('cb_safe').onchange = rebuildTopology;
+$('halo_color').onchange = rebuildTopology;
+$('ink').onchange = refreshInk;
+$('copylink').onclick = async () => {
+  const p = new URLSearchParams();
+  for (const id of QUERY_IDS) { const el = $(id); p.set(id, el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value); }
+  p.set('cam', [...camera.position.toArray(), ...controls.target.toArray(), ...camera.up.toArray(), camera.zoom, ...(state.ortho ? [camera.top] : [])].map(v => +v.toPrecision(6)).join(','));
+  if (state.ortho) p.set('ortho', '1');
+  const url = location.origin + location.pathname + '?' + p.toString();
+  try { await navigator.clipboard.writeText(url); setStatus('Link with the current settings and camera copied to the clipboard.', 'ok'); } catch (e) { window.prompt('Copy this link:', url); }
 };
 
-// ---- computation (worker with main-thread fallback) ---------------------------------
+// ---- export -------------------------------------------------------------------------------------------
+function saveBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); setStatus(`${name} downloaded.`, 'ok'); }
+function saveFile(text, name, type = 'text/plain') { saveBlob(new Blob([text], { type }), name); }
+const baseName = () => (state.fileName || 'wsslcs').replace(/\.(vtk|vtp|vtu)$/i, '');
+function screenshot(scale = 1, transparent = false, legend = false) {
+  const w = canvas.clientWidth, h = canvas.clientHeight, pr = renderer.getPixelRatio();
+  const gl = renderer.getContext(), maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  const k = Math.max(1, Math.min(scale, maxTex / (Math.max(w, h) * pr), Math.sqrt(50e6 / (w * h * pr * pr))));
+  const bg = scene.background, fog = scene.fog;
+  renderer.setPixelRatio(pr * k); renderer.setSize(w, h, false); composer.setPixelRatio(pr * k); composer.setSize(w, h);
+  updateCameraDependent();
+  if (transparent) { scene.background = null; scene.fog = null; renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, camera); }
+  else { renderer.clear(); composer.render(); }
+  const W = canvas.width, H = canvas.height, out = document.createElement('canvas');
+  const legendH = legend && !transparent ? Math.round(72 * pr * k) : 0;
+  out.width = W; out.height = H + legendH;
+  const ctx = out.getContext('2d');
+  if (legendH) { ctx.fillStyle = cssVar('--canvas'); ctx.fillRect(0, H, W, legendH); }
+  ctx.drawImage(canvas, 0, 0);
+  if (legendH) {
+    const s = pr * k;
+    drawColorbar(ctx, 16 * s, H + 8 * s, Math.min(W - 32 * s, 420 * s), 16 * s, s);
+    ctx.font = `${11 * s}px ${cssVar('--font-mono') || 'monospace'}`; ctx.fillStyle = cssVar('--text'); ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    const pm = manifoldColors();
+    ctx.fillText(`${state.fileName}${state.result ? ' · ' + state.result.fixed_points.length + ' fixed points, ' + state.result.branches.length + ' manifold branches' : ''}`, W - 16 * s, H + 8 * s);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = pm[0]; ctx.fillRect(W - 206 * s, H + 30 * s, 24 * s, 3 * s); ctx.fillStyle = cssVar('--text'); ctx.fillText('unstable manifold (attracting LCS)', W - 176 * s, H + 25 * s);
+    ctx.fillStyle = pm[1]; ctx.fillRect(W - 206 * s, H + 48 * s, 24 * s, 3 * s); ctx.fillStyle = cssVar('--text'); ctx.fillText('stable manifold (repelling LCS)', W - 176 * s, H + 43 * s);
+  }
+  out.toBlob(b => {
+    saveBlob(b, `${baseName()}_view${k > 1 ? '@' + (+k.toFixed(1)) + 'x' : ''}${transparent ? '_transparent' : ''}.png`);
+    scene.background = bg; scene.fog = fog; renderer.setPixelRatio(pr); renderer.setSize(w, h, false); composer.setPixelRatio(pr); composer.setSize(w, h);
+    invalidate();
+  }, 'image/png');
+}
+$('shot1').onclick = () => screenshot(1); $('shot2').onclick = () => screenshot(3, false, true); $('shot_t').onclick = () => screenshot(2, true);
+$('dl_fpvtk').onclick = () => state.result && saveFile(fixedPointsVTK(state.result), baseName() + '_FixedPoints.vtk');
+$('dl_manvtk').onclick = () => state.result && saveFile(manifoldsVTK(state.result), baseName() + '_Manifolds.vtk');
+$('dl_csv').onclick = () => state.result && saveFile(fixedPointsCSV(state.result), baseName() + '_FixedPoints.csv', 'text/csv');
+$('dl_json').onclick = () => state.result && saveFile(JSON.stringify({ file: state.fileName, vector_name: state.result.vector_name, scale: state.result.scale, poincare_index_sum: state.result.poincare_index_sum,
+  camera: { position: camera.position.toArray(), target: controls.target.toArray(), up: camera.up.toArray() },
+  fixed_points: state.result.fixed_points, branches: state.result.branches.map(b => ({ saddle: b.saddle, kind: b.kind_name, sign: b.sign, length: b.length, end_reason: b.end_reason, points: Array.from(b.points) })) },
+  (k, v) => (typeof v === 'number' && !Number.isInteger(v)) ? Number(v.toPrecision(8)) : v), baseName() + '_wsslcs.json', 'application/json');
+
+// ---- computation (worker with main-thread fallback) ----------------------------------------------
 let worker = null, jobId = 0, corePromise = null;
 try { worker = new Worker('worker.js', { type: 'module' }); } catch (e) { worker = null; }
 function computeInWorker(points, triangles, vectors, options) {
   return new Promise((resolve, reject) => {
     const id = ++jobId;
-    const onMsg = e => {
-      if (e.data.id !== id) return;
-      worker.removeEventListener('message', onMsg); worker.removeEventListener('error', onErr);
-      if (e.data.error) reject(new Error(e.data.error)); else resolve(e.data.result);
-    };
+    const onMsg = e => { if (e.data.id !== id) return; worker.removeEventListener('message', onMsg); worker.removeEventListener('error', onErr); if (e.data.error) reject(new Error(e.data.error)); else resolve(e.data.result); };
     const onErr = e => { worker.removeEventListener('message', onMsg); worker.removeEventListener('error', onErr); reject(new Error(e.message || 'worker error')); };
-    worker.addEventListener('message', onMsg);
-    worker.addEventListener('error', onErr);
+    worker.addEventListener('message', onMsg); worker.addEventListener('error', onErr);
     worker.postMessage({ id, points, triangles, vectors, options }, [points.buffer, triangles.buffer, vectors.buffer]);
   });
 }
-async function compute(points, triangles, vectors, options) {
+/** makeArrays() returns fresh typed arrays: the worker call transfers (detaches) them, so the main-thread fallback needs its own copies */
+async function compute(makeArrays, options) {
   if (worker) {
-    try { return await computeInWorker(points, triangles, vectors, options); }
-    catch (err) { if (!/worker error|importing a module|Failed to load/i.test(err.message)) throw err; worker = null; }
+    const a = makeArrays();
+    try { return await computeInWorker(a.points, a.triangles, a.vectors, options); }
+    catch (err) { if (!/worker error|importing a module|Failed to load/i.test(err.message)) throw err; worker = null; setStatus('The Web Worker is not available; computing on the main thread …'); }
   }
   corePromise = corePromise || import('./wsslcs-core.js');
-  const core = await corePromise;
-  return core.analyze(points, triangles, vectors, options);
+  const a = makeArrays();
+  return (await corePromise).analyze(a.points, a.triangles, a.vectors, options);
 }
-
 function setStatus(msg, cls = '') { $('status').textContent = msg; $('status').className = cls; }
 function options() {
   return { scale: parseFloat($('wss_scale').value) || 1, manifolds: $('manifolds').checked, excludeBoundary: $('exclude_boundary').checked,
-    stepFraction: parseFloat($('step_fraction').value) || 0.2, maxSteps: parseInt($('max_steps').value, 10) || 20000,
-    maxLength: parseFloat($('max_length').value) || 0, perturbation: parseFloat($('perturbation').value) || 0.1,
-    captureRadius: parseFloat($('capture_radius').value) || 0.5 };
+    stepFraction: parseFloat($('step_fraction').value) || 0.2, maxSteps: parseInt($('max_steps').value, 10) || 20000, maxLength: parseFloat($('max_length').value) || 0,
+    perturbation: parseFloat($('perturbation').value) || 0.1, captureRadius: parseFloat($('capture_radius').value) || 0.5,
+    streamlines: $('streamlines').checked ? { separation: parseFloat($('sl_sep').value) || 2.5 } : false };
 }
 const yieldToUI = () => new Promise(r => setTimeout(r, 0));
-
+let runToken = 0;
 async function run() {
   if (!state.parsed) { setStatus('Load a file or the demo data first.', 'err'); return; }
-  $('run').disabled = $('demo').disabled = true;
+  const token = ++runToken, parsed = state.parsed, name = state.fileName;
+  $('run').disabled = $('demo').disabled = $('file').disabled = true;
   try {
-    setStatus(`Computing fixed points and manifolds for ${state.fileName} …`);
-    await yieldToUI();
-    const sel = selectVectors(state.parsed, $('vector_array').value || null);
-    const opts = options();
+    setStatus(`Computing fixed points, manifolds and streamlines for ${name} …`); await yieldToUI();
+    const sel = selectVectors(parsed, $('vector_array').value || null);
+    const makeArrays = () => ({ points: Float64Array.from(parsed.points), triangles: Int32Array.from(parsed.triangles), vectors: Float64Array.from(sel.data) });
     const t0 = performance.now();
-    const res = await compute(Float64Array.from(state.parsed.points), Int32Array.from(state.parsed.triangles), Float64Array.from(sel.data), opts);
-    res.vector_name = sel.name;
-    res.wall_time_s = (performance.now() - t0) / 1000;
+    const res = await compute(makeArrays, options());
+    if (token !== runToken) return;                                   // superseded by a newer run
+    res.vector_name = sel.name; res.file = name; res.wall_time_s = (performance.now() - t0) / 1000;
+    const first = !state.result || state.result.file !== name;
     buildScene(res);
-    setStatus(`Done: ${res.fixed_points.length} fixed points, ${res.branches.length} manifold branches (${res.wall_time_s.toFixed(2)} s).`, 'ok');
-  } catch (err) {
-    setStatus('Error: ' + err.message, 'err');
-  } finally {
-    $('run').disabled = $('demo').disabled = false;
-  }
+    if (first) fitView();
+    invalidate();
+    setStatus(`Done: ${res.fixed_points.length} fixed points, ${res.branches.length} manifold branches, ${res.streamlines.length} streamlines (${res.wall_time_s.toFixed(2)} s).`, 'ok');
+  } catch (err) { if (token === runToken) setStatus('Error: ' + err.message, 'err'); console.error(err); }
+  finally { if (token === runToken) $('run').disabled = $('demo').disabled = $('file').disabled = false; }
 }
-
 async function loadBuffer(buffer, name) {
-  setStatus(`Reading ${name} …`);
-  await yieldToUI();
+  setStatus(`Reading ${name} …`); await yieldToUI();
   const parsed = await readVTK(buffer);
-  state.parsed = parsed;
-  state.fileName = name;
+  state.parsed = parsed; state.fileName = name;
   const cands = parsed.pointArrays.filter(a => a.ncomp === 3 && a.data.length === parsed.points.length).map(a => a.name);
-  const sel = $('vector_array');
-  const prev = sel.value;
+  const sel = $('vector_array'), prev = sel.value;
   sel.innerHTML = '<option value="">(auto)</option>' + cands.map(c => `<option value="${c}">${c}</option>`).join('');
   sel.value = cands.includes(prev) ? prev : (cands.includes('wss') ? 'wss' : '');
-  const w = parsed.warnings.length ? ` (${parsed.warnings.join('; ')})` : '';
-  setStatus(`${name}: ${parsed.points.length / 3} points, ${parsed.triangles.length / 3} triangles, vector arrays: ${cands.join(', ') || 'none'}${w}`);
+  setStatus(`${name}: ${parsed.points.length / 3} points, ${parsed.triangles.length / 3} triangles, vector arrays: ${cands.join(', ') || 'none'}`);
   await run();
 }
-
-$('file').onchange = async e => {
-  const f = e.target.files[0];
-  if (!f) return;
-  try { await loadBuffer(await f.arrayBuffer(), f.name); }
-  catch (err) { setStatus('Error: ' + err.message, 'err'); }
-};
+$('file').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { await loadBuffer(await f.arrayBuffer(), f.name); } catch (err) { setStatus('Error: ' + err.message, 'err'); } };
 $('form').onsubmit = e => { e.preventDefault(); run(); };
 $('demo').onclick = async () => {
   $('demo').disabled = true;
@@ -492,39 +1215,35 @@ $('demo').onclick = async () => {
   finally { $('demo').disabled = false; }
 };
 
-// ---- exports (copy to clipboard) ---------------------------------------------------
-async function copyText(text, label) {
-  const ta = $('export_text');
-  ta.value = text;
-  try { await navigator.clipboard.writeText(text); setStatus(`${label} copied to the clipboard (${(text.length / 1024).toFixed(0)} kB).`, 'ok'); }
-  catch (e) { ta.focus(); ta.select(); setStatus(`${label} shown below – select the text and copy it.`, ''); }
+// ---- start: URL parameters for presets, shared views and tests ------------------------------------------
+(function applyQuery() {
+  const set = (id, v) => { const el = $(id); if (!el || v === null) return; if (el.type === 'checkbox') el.checked = v === '1' || v === 'true'; else el.value = v; };
+  for (const id of QUERY_IDS) set(id, query.get(id));
+  gtao.enabled = $('ao').checked;
+  applyTheme();
+})();
+if (query.get('demo') !== '0') {
+  $('demo').click();
+  const waitDone = setInterval(() => {
+    if (!state.result) return;
+    clearInterval(waitDone);
+    const focus = query.get('focus');
+    if (focus !== null && state.result.fixed_points[+focus]) focusOn(state.result.fixed_points[+focus], parseFloat(query.get('dist')) || 40, false);
+    const view = query.get('view'); if (view && VIEWS[view]) fitView(new THREE.Vector3(...VIEWS[view][0]), new THREE.Vector3(...VIEWS[view][1]), false);
+    const cam = (query.get('cam') || '').split(',').map(Number), camOK = cam.length >= 9 && cam.length <= 11 && cam.every(Number.isFinite);
+    if (camOK) { camera.up.set(cam[6], cam[7], cam[8]); makeControls(new THREE.Vector3(cam[3], cam[4], cam[5])); camera.position.set(cam[0], cam[1], cam[2]); controls.update(); }
+    if (query.get('ortho') === '1') setupCamera(true);
+    if (camOK && cam.length >= 10 && cam[9] > 0) {
+      if (camera.isOrthographicCamera && cam.length === 11 && cam[10] > 0) { const a = (canvas.clientWidth || 800) / (canvas.clientHeight || 600); camera.top = cam[10]; camera.bottom = -cam[10]; camera.left = -cam[10] * a; camera.right = cam[10] * a; }
+      camera.zoom = cam[9]; camera.updateProjectionMatrix();
+    }
+    invalidate();
+    setTimeout(() => {
+      render();
+      console.log('AUTORUN DONE ' + JSON.stringify({ fixed_points: state.result.fixed_points.length, branches: state.result.branches.length, streamlines: state.result.streamlines.length, ao: gtao.enabled, style: $('curve_style').value, palette: $('palette').value, shading: $('shading').value, frame_ms: +lastFrameMs.toFixed(1), near: +camera.near.toPrecision(4), far: +camera.far.toPrecision(4), center: state.result.center.map(v => +v.toFixed(3)), line_resolution: state.lineMaterials[0] ? state.lineMaterials[0].resolution.toArray() : null }));
+    }, 700);
+  }, 200);
 }
-function saveFile(text, name, type = 'text/plain') {
-  const blob = new Blob([text], { type });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-  setStatus(`${name} downloaded (${(text.length / 1024).toFixed(0)} kB).`, 'ok');
-}
-const baseName = () => (state.fileName || 'wsslcs').replace(/\.(vtk|vtp|vtu)$/i, '');
-$('dl_fpvtk').onclick = () => state.result && saveFile(fixedPointsVTK(state.result), baseName() + '_FixedPoints.vtk');
-$('dl_manvtk').onclick = () => state.result && saveFile(manifoldsVTK(state.result), baseName() + '_Manifolds.vtk');
-$('dl_csv').onclick = () => state.result && saveFile(fixedPointsCSV(state.result), baseName() + '_FixedPoints.csv', 'text/csv');
-$('dl_json').onclick = () => state.result && saveFile(resultJSON(), baseName() + '_wsslcs.json', 'application/json');
-$('copy_csv').onclick = () => state.result && copyText(fixedPointsCSV(state.result), 'Fixed points CSV');
-$('copy_fpvtk').onclick = () => state.result && copyText(fixedPointsVTK(state.result), 'Fixed points VTK');
-$('copy_manvtk').onclick = () => state.result && copyText(manifoldsVTK(state.result), 'Manifolds VTK');
-function resultJSON() {
-  return JSON.stringify({
-    file: state.fileName, vector_name: state.result.vector_name, scale: state.result.scale, poincare_index_sum: state.result.poincare_index_sum,
-    fixed_points: state.result.fixed_points, branches: state.result.branches.map(b => ({ saddle: b.saddle, kind: b.kind_name, sign: b.sign, length: b.length, end_reason: b.end_reason, points: Array.from(b.points) })),
-  }, (k, v) => (typeof v === 'number' && !Number.isInteger(v)) ? Number(v.toPrecision(8)) : v);
-}
-$('copy_json').onclick = () => state.result && copyText(resultJSON(), 'JSON');
-
-// ---- start with the demo so the page opens in a working state ----------------------------
-$('demo').click();
 </script>
 </body>
 </html>

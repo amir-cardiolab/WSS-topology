@@ -1,16 +1,16 @@
 # WSSLCS Explorer
 
-Fixed points and stable/unstable manifolds (WSS Lagrangian coherent
-structures) of a wall shear stress (WSS) vector field on a triangulated
-surface, computed entirely in the browser.
+Fixed points, stable/unstable manifolds (WSS Lagrangian coherent structures)
+and the direction field of a wall shear stress (WSS) vector field on a
+triangulated surface, computed and rendered entirely in the browser.
 
 **Live app: https://amir-cardiolab.github.io/WSS-topology/**
 
 ![WSS LCS Explorer](docs/WSSLCS_explorer.png)
 
-*The WSS LCS Explorer: fixed points (spheres, coloured by type) and the
-unstable (blue) and stable (red) manifolds of a WSS field on a carotid artery
-model, computed in the browser.*
+*The WSS LCS Explorer: fixed points and the unstable (blue) and stable (red)
+manifolds of a WSS field on a carotid artery model, computed in the browser
+(screenshot of an earlier version of the page).*
 
 Open the page, load a surface file with a point vector array (or use the
 demo data set that loads automatically), and explore the WSS topology:
@@ -22,11 +22,14 @@ demo data set that loads automatically), and explore the WSS topology:
 * **stable and unstable manifolds** of the saddles: the WSS trajectories
   leaving each saddle along its eigenvectors, integrated forward (unstable
   manifold, attracting WSS LCS, blue) and backward (stable manifold, repelling
-  WSS LCS, red) until they reach another fixed point or leave the surface.
+  WSS LCS, red) until they reach another fixed point or leave the surface;
+* **streamlines** of the WSS direction field, evenly spaced over the surface,
+  which show how the manifolds organise the near-wall flow.
 
 Results can be downloaded as legacy ASCII VTK files (readable by ParaView),
-CSV and JSON.  Nothing is uploaded: the file is parsed and processed by
-JavaScript in your browser.
+CSV and JSON, and the view as PNG (screen resolution, 3× with colour bar and
+legend, or with a transparent background).  Nothing is uploaded: the file is
+parsed and processed by JavaScript in your browser.
 
 ## Input files
 
@@ -38,6 +41,36 @@ JavaScript in your browser.
 The surface must be triangulated (quads/polygons are fan-triangulated) and
 carry a 3-component point array with the WSS vectors (cell vectors are
 averaged to the points).  Any array can be selected from the drop-down.
+Triangles with inconsistent winding are re-oriented automatically.
+
+## Visualization
+
+* **Curves that never fight the wall.** Manifolds and streamlines are lifted
+  slightly off the surface along the local normal, the wall and the curves
+  carry complementary depth offsets, and every manifold is drawn over a
+  depth-dependent halo in the background tone, so curves stay crisp at any
+  zoom and crossings read correctly.  Optionally, the parts of a curve hidden
+  behind the wall are drawn as translucent dashes (*hidden parts as dashes*).
+* **Faithful colours.** The |WSS| colour map (viridis, inferno, magma,
+  cividis, turbo, greys) is sampled per pixel from a lookup table, with
+  linear or logarithmic scale, automatic 2–98 % or manual range, units label
+  and a colour bar with round tick values; no tone mapping; diffuse shading
+  with calibrated lights so that the brightest colour equals the colour-map
+  colour (options: soft sheen, unlit).
+* **Readable symbols.** Fixed-point type is encoded by shape (saddle
+  octahedron, source-like cube, sink-like sphere, ring for foci) and colour
+  (classic per-type palette, or by stability in the manifold hues), with an
+  outline and a minimum size on screen; saddle eigenvectors are drawn as
+  short segments; a colour-blind-safe palette (Okabe–Ito) is available.
+* **Options.** Screen-space strokes with pseudo-tube shading or shaded tubes;
+  arrow glyphs; ambient occlusion and depth cueing (both off by default);
+  light and dark themes; adjustable line width, halo, lift and marker size.
+* **Interaction.** Orbit, pan and zoom to the cursor; view presets, an
+  orientation gizmo and an orthographic projection; hover tooltips and
+  selection linked with the result tables; double-click a fixed point (or a
+  table row) to fly to it; *Copy settings link* produces a URL that
+  reproduces every setting and the camera, and every control can be preset
+  from URL parameters (e.g. `?theme=light&cmap=inferno&focus=3&dist=60`).
 
 ## Method and references
 
@@ -76,18 +109,20 @@ Implementation notes: vertex vectors are projected onto the tangent planes,
 transported into the triangles with the discrete polar map of the vertex
 fans, and interpolated linearly inside each triangle; manifolds are traced
 with RK4 in arc length across the triangles (exact edge crossings, vertex
-handling).  This page is the browser version of the Python/VTK package
-WSSLCS, which also computes WSS trajectories, residence time and WSS
-exposure time.
+handling); streamlines are seeded with a minimum separation distance
+(Jobard–Lefer style) and integrated in both directions.  This page is the
+browser version of the Python/VTK package WSSLCS, which also computes WSS
+trajectories, residence time and WSS exposure time.
 
 ## Files
 
 | file | content |
 |---|---|
 | `index.html` | the page (three.js rendering, controls, tables, exports) |
-| `wsslcs-core.js` | mesh, field transport, fixed points, manifolds, tracer |
+| `wsslcs-core.js` | mesh (consistent winding, normals), field transport, fixed points, manifolds, evenly spaced streamlines, VTK/CSV writers |
 | `vtk-reader.js` | VTK legacy / XML reader |
 | `worker.js` | runs the analysis in a Web Worker |
+| `colormaps.js` | colour map tables (generated with matplotlib) |
 | `docs/WSSLCS_explorer.png` | screenshot used in this README |
 | `demo/Carotid_artery_TAWSS.vtk` | demo data: time-averaged WSS on a carotid artery surface (22 899 points, 45 794 triangles, 7 fixed points) |
 
